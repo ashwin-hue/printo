@@ -272,3 +272,4 @@ export const InteractiveCostCalculator: React.FC<InteractiveCostCalculatorProps>
     </section>
   );
 };
+

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ArrowRight, 
-  Printer, 
-  Clock, 
-  ShieldCheck, 
-  Sparkles, 
-  CheckCircle2, 
-  MapPin, 
+import {
+  ArrowRight,
+  Printer,
+  Clock,
+  ShieldCheck,
+  Sparkles,
+  CheckCircle2,
+  MapPin,
   FileCheck,
   Zap,
   Layers,
@@ -60,10 +60,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-12 items-center">
-          
+
           {/* Left Column: Hero Typography & CTAs */}
           <div className="lg:col-span-7 space-y-8 text-center lg:text-left">
-            
+
             {/* Top pill badge */}
             <div className="hero-reveal inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-white/90 backdrop-blur-md border border-brand-200/90 text-brand-700 shadow-sm text-xs font-semibold tracking-wide">
               <span className="flex h-2 w-2 rounded-full bg-brand-600 animate-ping" />
@@ -128,12 +128,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
           {/* Right Column: High-Precision Interactive Live Dispatch Card */}
           <div className="hero-reveal lg:col-span-5 relative">
-            
+
             {/* Outer Specular Aura */}
             <div className="absolute -inset-1 bg-gradient-to-tr from-brand-600 via-indigo-500 to-purple-600 rounded-[32px] blur-xl opacity-20 group-hover:opacity-40 transition duration-700" />
 
             <div className="relative rounded-[28px] bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl p-6 sm:p-7 space-y-6">
-              
+
               {/* Card Header with Technical HUD details */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-3">
@@ -175,7 +175,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                     <span className="text-brand-700 font-mono font-bold">{32 * heroCopies} / {32 * heroCopies} pages (100%)</span>
                   </div>
                   <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden p-0.5">
-                    <div 
+                    <div
                       className="h-full bg-gradient-to-r from-brand-600 via-indigo-600 to-emerald-500 rounded-full transition-all duration-700"
                       style={{ width: '100%' }}
                     />
@@ -193,22 +193,20 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setHeroColorMode(heroColorMode === 'bw' ? 'color' : 'bw')}
-                    className={`p-2 rounded-xl border text-[11px] font-bold transition-all text-center ${
-                      heroColorMode === 'color' 
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 ring-1 ring-indigo-500' 
+                    className={`p-2 rounded-xl border text-[11px] font-bold transition-all text-center ${heroColorMode === 'color'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-900 ring-1 ring-indigo-500'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <span>{heroColorMode === 'bw' ? 'B&W Laser' : 'Vibrant Color'}</span>
                   </button>
 
                   <button
                     onClick={() => setHeroSides(heroSides === 'single' ? 'double' : 'single')}
-                    className={`p-2 rounded-xl border text-[11px] font-bold transition-all text-center ${
-                      heroSides === 'double' 
-                        ? 'border-brand-600 bg-brand-50 text-brand-900' 
+                    className={`p-2 rounded-xl border text-[11px] font-bold transition-all text-center ${heroSides === 'double'
+                        ? 'border-brand-600 bg-brand-50 text-brand-900'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <span>{heroSides === 'double' ? 'Double Sided' : 'Single Sided'}</span>
                   </button>

@@ -26,3 +26,4 @@ export const pulseAttention = (element: HTMLElement | string) => {
     { scale: 1.02, duration: 0.3, yoyo: true, repeat: 1, ease: 'power1.inOut' }
   );
 };
+

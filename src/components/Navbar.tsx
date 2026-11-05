@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Printer, 
-  Bell, 
-  User as UserIcon, 
-  MapPin, 
-  FileText, 
-  Store, 
-  Clock, 
-  CheckCircle2, 
+import {
+  Printer,
+  Bell,
+  User as UserIcon,
+  MapPin,
+  FileText,
+  Store,
+  Clock,
+  CheckCircle2,
   Sparkles,
   ArrowRight,
   LogOut,
@@ -16,11 +16,11 @@ import {
   Check,
   Compass
 } from 'lucide-react';
-import { 
-  getCurrentUser, 
-  setCurrentUser, 
-  switchRole, 
-  getNotifications, 
+import {
+  getCurrentUser,
+  setCurrentUser,
+  switchRole,
+  getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   SAMPLE_USERS
@@ -34,10 +34,10 @@ interface NavbarProps {
   onSelectShopForOrder?: (shopId: string) => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ 
-  activeTab, 
-  setActiveTab, 
-  onOpenAuth 
+export const Navbar: React.FC<NavbarProps> = ({
+  activeTab,
+  setActiveTab,
+  onOpenAuth
 }) => {
   const [user, setUser] = useState<User>(getCurrentUser());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -75,10 +75,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       <header className="sticky top-0 z-50 glass-panel border-b border-slate-200/80 transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            
+
             {/* Logo & Brand Identity */}
             <div className="flex items-center gap-8">
-              <button 
+              <button
                 onClick={() => setActiveTab('landing')}
                 className="flex items-center gap-3 group text-left focus:outline-none"
               >
@@ -104,22 +104,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/70">
                 <button
                   onClick={() => setActiveTab('landing')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    activeTab === 'landing'
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${activeTab === 'landing'
                       ? 'bg-white text-brand-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                  }`}
+                    }`}
                 >
                   Overview
                 </button>
 
                 <button
                   onClick={() => setActiveTab('shops')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    activeTab === 'shops'
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${activeTab === 'shops'
                       ? 'bg-white text-brand-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                  }`}
+                    }`}
                 >
                   <MapPin className="w-3.5 h-3.5 text-brand-600" />
                   Find Shops
@@ -127,11 +125,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 <button
                   onClick={() => setActiveTab('order_wizard')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    activeTab === 'order_wizard'
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${activeTab === 'order_wizard'
                       ? 'bg-white text-brand-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                  }`}
+                    }`}
                 >
                   <FileText className="w-3.5 h-3.5 text-indigo-600" />
                   Upload & Print
@@ -139,11 +136,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 <button
                   onClick={() => setActiveTab('order_tracker')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    activeTab === 'order_tracker' || activeTab === 'order_history'
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${activeTab === 'order_tracker' || activeTab === 'order_history'
                       ? 'bg-white text-brand-700 shadow-sm'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                  }`}
+                    }`}
                 >
                   <Clock className="w-3.5 h-3.5 text-emerald-600" />
                   Track Orders
@@ -151,11 +147,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 <button
                   onClick={() => setActiveTab('shop_dashboard')}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
-                    activeTab === 'shop_dashboard'
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${activeTab === 'shop_dashboard'
                       ? 'bg-brand-700 text-white shadow-sm'
                       : 'text-brand-700 hover:bg-brand-50'
-                  }`}
+                    }`}
                 >
                   <Store className="w-3.5 h-3.5" />
                   Shop Dashboard
@@ -165,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Right Controls: Role Switcher Pill + Notifications + Profile */}
             <div className="flex items-center gap-2.5 sm:gap-3">
-              
+
               {/* Quick Role Switcher Pill */}
               <div className="flex items-center p-1 bg-slate-900 text-white rounded-full text-xs font-medium shadow-md">
                 <span className="hidden sm:inline-flex px-3 text-slate-400 font-mono text-[11px] items-center gap-1">
@@ -235,11 +230,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                                 setShowNotifDropdown(false);
                               }
                             }}
-                            className={`p-3 rounded-2xl border text-left cursor-pointer transition-all ${
-                              notif.is_read
+                            className={`p-3 rounded-2xl border text-left cursor-pointer transition-all ${notif.is_read
                                 ? 'bg-slate-50/50 border-slate-100 opacity-75'
                                 : 'bg-brand-50/50 border-brand-100 hover:bg-brand-50'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <p className="font-semibold text-xs text-slate-900">{notif.title}</p>
@@ -280,9 +274,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       <nav className="md:hidden fixed bottom-3 inset-x-4 z-40 bg-slate-950/90 backdrop-blur-xl border border-slate-800 rounded-3xl p-2 shadow-2xl flex items-center justify-around text-white">
         <button
           onClick={() => setActiveTab('landing')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${
-            activeTab === 'landing' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
-          }`}
+          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${activeTab === 'landing' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
+            }`}
         >
           <Printer className="w-5 h-5" />
           <span className="text-[10px] font-bold">Home</span>
@@ -290,9 +283,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('shops')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${
-            activeTab === 'shops' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
-          }`}
+          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${activeTab === 'shops' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
+            }`}
         >
           <MapPin className="w-5 h-5" />
           <span className="text-[10px] font-bold">Shops</span>
@@ -307,9 +299,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('order_tracker')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${
-            activeTab === 'order_tracker' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
-          }`}
+          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${activeTab === 'order_tracker' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
+            }`}
         >
           <Clock className="w-5 h-5" />
           <span className="text-[10px] font-bold">Orders</span>
@@ -317,9 +308,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('shop_dashboard')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${
-            activeTab === 'shop_dashboard' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
-          }`}
+          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-colors ${activeTab === 'shop_dashboard' ? 'text-brand-400' : 'text-slate-400 hover:text-white'
+            }`}
         >
           <Store className="w-5 h-5" />
           <span className="text-[10px] font-bold">Portal</span>

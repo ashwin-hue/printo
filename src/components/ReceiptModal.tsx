@@ -167,3 +167,4 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
     </div>
   );
 };
+

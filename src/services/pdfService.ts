@@ -276,3 +276,4 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
     }, 2000);
   }, 400);
 }
+

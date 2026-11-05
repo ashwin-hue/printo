@@ -623,3 +623,4 @@ export function resetDataToDefaults(): void {
   initStorage();
   broadcastChange();
 }
+

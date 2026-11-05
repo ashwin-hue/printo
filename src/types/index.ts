@@ -130,3 +130,4 @@ export interface DailyShopStats {
   completed_today: number;
   average_print_time_mins: number;
 }
+
