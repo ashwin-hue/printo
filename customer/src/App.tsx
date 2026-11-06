@@ -7,10 +7,9 @@ import { HowItWorksSection, FeaturesSection, BenefitsSection, FAQSection } from 
 import { ShopDiscovery } from './components/ShopDiscovery';
 import { OrderWizard } from './components/OrderWizard';
 import { OrderTracker } from './components/OrderTracker';
-import { ShopOwnerDashboard } from './components/ShopOwnerDashboard';
 import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
-import { getCurrentUser, initStorage, switchRole } from './services/storage';
+import { initStorage } from './services/storage';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<string>('landing');
@@ -33,8 +32,8 @@ export function App() {
   };
 
   const handleRegisterShop = () => {
-    switchRole('shop_owner');
-    setActiveTab('shop_dashboard');
+    // Open Shop Portal in new tab or navigate to shops app
+    window.open('http://localhost:5174', '_blank');
   };
 
   return (
@@ -89,10 +88,6 @@ export function App() {
             onNewOrder={() => setActiveTab('order_wizard')}
             onViewShop={handleSelectShop}
           />
-        )}
-
-        {activeTab === 'shop_dashboard' && (
-          <ShopOwnerDashboard />
         )}
       </main>
 

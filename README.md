@@ -4,6 +4,44 @@
 
 ---
 
+## 📂 Project Architecture (Split Folders)
+
+The project is split into two dedicated applications:
+
+| Folder | Application | Default Port | Description |
+|---|---|---|---|
+| [`customer/`](file:///d:/printo/customer) | **Customer Printing Portal** | `http://localhost:5173` | Student/customer facing portal: landing page, shop radar discovery, PDF upload & configuration wizard, real-time order tracking, receipts. |
+| [`shops/`](file:///d:/printo/shops) | **Shop Owner Dispatch Console** | `http://localhost:5174` | Printing vendor console: live laser queue, in-browser PDF inspection & native browser printing, order status updates, dynamic rate card pricing, and shop settings. |
+
+### 🚀 Running the Applications
+
+#### 1. Run Both / Workspaces (From Root)
+```bash
+# Start Customer Portal (port 5173)
+npm run dev:customer
+
+# Start Shop Owner Console (port 5174)
+npm run dev:shops
+
+# Build both applications
+npm run build
+```
+
+#### 2. Run Independently (Inside Each Folder)
+```bash
+# Customer Side
+cd customer
+npm install
+npm run dev
+
+# Shop Side
+cd shops
+npm install
+npm run dev
+```
+
+---
+
 ## 🎨 Creative Direction & Awwwards Design Audit
 
 ### Top 10 Weak Design Decisions Identified & Addressed:
