@@ -1,179 +1,172 @@
 import React from 'react';
 import { 
-  XCircle, 
-  CheckCircle2, 
+  X, 
+  Check, 
   Clock, 
-  Smartphone, 
   FileWarning, 
   ShieldCheck, 
-  Sparkles,
+  ArrowRight,
   Zap,
-  Printer,
-  AlertTriangle
+  Printer
 } from 'lucide-react';
 
 export const ProblemSolutionSection: React.FC = () => {
   return (
-    <section className="py-24 lg:py-32 bg-white relative overflow-hidden border-t border-slate-200/80">
-      {/* Ambient background lighting */}
-      <div className="absolute top-1/2 right-0 w-96 h-96 bg-brand-500/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-10 w-80 h-80 bg-rose-500/5 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    <section className="py-20 lg:py-28 bg-[#EEF0F2] text-[#0F1115] relative overflow-hidden border-t border-[#C4C9CF]/60">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw]">
         
         {/* Editorial Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 text-[11px] font-mono font-bold uppercase tracking-wider">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-600"></span>
-            Systemic Inefficiency Solved
+        <div className="max-w-2xl mb-14 space-y-3">
+          <div className="font-mono font-medium text-[11.5px] tracking-[0.06em] uppercase text-[#2A2E35] flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
+            CAMPUS BOTTLENECK SOLVED
           </div>
-          <h2 className="font-display font-black text-3xl sm:text-5xl text-slate-900 tracking-[-0.03em] leading-tight">
-            Stop losing hours standing in crowded xerox shops.
+          <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.025em] text-[#0F1115]">
+            The old campus queue.<br />
+            <em className="italic text-[#0F1115]/90">Replaced by edge laser dispatch.</em>
           </h2>
-          <p className="text-slate-600 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-            Whether it's semester lab records, capstone project reports, or legal blueprints, campus printing has remained stubbornly manual for decades.
+          <p className="font-sans font-normal text-sm sm:text-base text-[#2A2E35] leading-relaxed pt-1">
+            Whether for semester lab records, final thesis reports, or architectural CAD plots, campus printing has remained stubbornly manual for decades. Printo turns it into an instant 30-second token pass.
           </p>
         </div>
 
         {/* High-Contrast Editorial Split Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
           
-          {/* Card 1: The Frustrating Old Way (Moody Dark Charcoal with Crimson Accents) */}
-          <div className="rounded-[32px] p-8 sm:p-10 bg-slate-950 text-white border border-slate-800/90 shadow-card-dark flex flex-col justify-between relative overflow-hidden group">
-            {/* Ambient inner glow */}
-            <div className="absolute -top-20 -right-20 w-60 h-60 bg-rose-600/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="space-y-6 relative z-10">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] font-bold text-rose-400 uppercase tracking-widest bg-rose-950/80 border border-rose-800/60 px-3 py-1 rounded-full flex items-center gap-1.5">
+          {/* Card 1: The Old Way (Moody Obsidian Dark #0D1017) */}
+          <div className="rounded-[24px] p-8 sm:p-10 bg-[#0D1017] text-white border border-white/10 shadow-2xl flex flex-col justify-between relative overflow-hidden">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <span className="font-mono text-[11px] font-medium text-rose-400 uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                  THE OLD ANALOG BOTTLE-NECK
+                  THE ANALOG BOTTLENECK
                 </span>
-                <span className="text-rose-400 font-mono text-xs">STATUS: BROKEN</span>
+                <span className="font-mono text-[11px] text-slate-500">LEGACY · 45 MIN WAIT</span>
               </div>
 
               <div>
-                <h3 className="font-display font-black text-2xl sm:text-3xl text-white tracking-tight">
-                  The 45-Minute Pre-Submission Chaos
+                <h3 className="font-serif font-normal text-2xl sm:text-3xl text-white leading-tight">
+                  The Pre-Submission Morning Chaos
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-400 mt-2">
-                  What happens at 8:30 AM right before a 9:00 AM academic submission deadline.
+                <p className="font-sans text-xs sm:text-sm text-[#8B9098] mt-2 leading-relaxed">
+                  What happens at 8:30 AM outside campus xerox centers right before a 9:00 AM academic submission deadline.
                 </p>
               </div>
 
-              <div className="space-y-4 pt-2">
-                <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white/[0.03] border border-white/5">
-                  <div className="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    ✕
-                  </div>
+              {/* Problem Breakdown List */}
+              <div className="space-y-3 font-sans text-xs sm:text-[13px] text-slate-300">
+                <div className="border-t border-white/10 pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 text-xs">✕</span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-200">Chaotic Counters & Lost Order Priority</h4>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                      Twenty students shouting across a glass counter while the shopkeeper juggles random WhatsApp chats and emails.
-                    </p>
+                    <span className="font-medium text-white">45-Minute Physical Lines:</span> Crowded shops with 30 students jostling for 2 operators.
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white/[0.03] border border-white/5">
-                  <div className="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    ✕
-                  </div>
+                <div className="border-t border-white/10 pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 text-xs">✕</span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-200">Public USB Virus & Privacy Leaks</h4>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                      Plugging your personal flash drive into malware-infested shop terminals or leaving confidential documents on open desktop folders.
-                    </p>
+                    <span className="font-medium text-white">Corrupted USB Drives & Viruses:</span> Malware transmission between public counter computers and student thumb drives.
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white/[0.03] border border-white/5">
-                  <div className="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    ✕
-                  </div>
+                <div className="border-t border-white/10 pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 text-xs">✕</span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-200">Misprinted Copies & Surprise Surcharges</h4>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                      Accidental single-sided prints that waste reams of paper, missed spiral binding margins, and unpredictable pricing.
-                    </p>
+                    <span className="font-medium text-white">Verbal Miscommunications:</span> Pages printed single-sided instead of double, wrong orientation, incorrect binding coils.
+                  </div>
+                </div>
+
+                <div className="border-t border-white/10 pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 text-xs">✕</span>
+                  <div>
+                    <span className="font-medium text-white">Surprise Surge Pricing:</span> Ad-hoc rate calculation at the counter with no itemized receipt or breakdown.
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-rose-300">
-              <span>AVERAGE WASTED TIME:</span>
-              <strong className="text-rose-400 font-extrabold text-sm">~45 minutes</strong>
+            <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between font-mono text-[11px] text-rose-400">
+              <span>AVERAGE LOST TIME</span>
+              <span className="font-bold text-sm">~45 MIN / SUBMISSION</span>
             </div>
           </div>
 
-          {/* Card 2: The Modern Printo Way (Luminous Frosted White with Indigo & Emerald Laser Precision) */}
-          <div className="rounded-[32px] p-8 sm:p-10 bg-gradient-to-b from-white to-slate-50 border border-brand-200 shadow-2xl flex flex-col justify-between relative overflow-hidden group">
-            {/* Ambient top light */}
-            <div className="absolute -top-20 -right-20 w-60 h-60 bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="space-y-6 relative z-10">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] font-bold text-brand-700 uppercase tracking-widest bg-brand-50 border border-brand-200/80 px-3 py-1 rounded-full flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  THE ENGINE: PRINTO DISPATCH
+          {/* Card 2: The Printo Protocol (Luminous Pale Cream/White) */}
+          <div className="rounded-[24px] p-8 sm:p-10 bg-white text-[#0F1115] border border-[#C4C9CF] shadow-xl flex flex-col justify-between relative overflow-hidden">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-[#EEF0F2] pb-4">
+                <span className="font-mono text-[11px] font-medium text-[#FF5A1F] uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
+                  THE PRINTO PROTOCOL
                 </span>
-                <span className="text-emerald-700 font-mono text-xs font-bold">STATUS: ZERO WAIT</span>
+                <span className="font-mono text-[11px] text-[#FF5A1F] bg-[#FFE1D3] px-2 py-0.5 rounded-full font-bold">
+                  30-SEC PICKUP
+                </span>
               </div>
 
               <div>
-                <h3 className="font-display font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
-                  Upload Remote. Pick Up When Ready.
+                <h3 className="font-serif font-normal text-2xl sm:text-3xl text-[#0F1115] leading-tight">
+                  Calibrated Remote Laser Dispatch
                 </h3>
-                <p className="text-xs sm:text-sm text-slate-600 mt-2">
-                  Complete customer-to-press orchestration from your desk or dorm.
+                <p className="font-sans text-xs sm:text-sm text-[#7A7F88] mt-2 leading-relaxed">
+                  Upload your PDF from your hostel room, cafeteria, or lecture hall. Collect from the shop counter in under 30 seconds.
                 </p>
               </div>
 
-              <div className="space-y-4 pt-2">
-                <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white border border-brand-100 shadow-sm">
-                  <div className="w-6 h-6 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    ✓
-                  </div>
+              {/* Solution List */}
+              <div className="space-y-3 font-sans text-xs sm:text-[13px] text-[#2A2E35]">
+                <div className="border-t border-[#EEF0F2] pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-[#FFE1D3] text-[#D9430F] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">✓</span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900">In-Browser PDF.js Analysis & Instant Quote</h4>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                      Instant client-side verification of total page counts, paper orientation, and double-sided discounts before submission.
-                    </p>
+                    <span className="font-medium text-[#0F1115]">Zero Counter Waiting:</span> Jobs print in background laser queues while you walk to the shop.
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white border border-brand-100 shadow-sm">
-                  <div className="w-6 h-6 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    ✓
-                  </div>
+                <div className="border-t border-[#EEF0F2] pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-[#FFE1D3] text-[#D9430F] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">✓</span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900">Dedicated Shop Owner Laser Terminal</h4>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                      Operators preview documents directly in their browser and send them directly to local high-speed printers via native print.
-                    </p>
+                    <span className="font-medium text-[#0F1115]">Direct In-Browser PDF.js Inspection:</span> Automatic page count extraction, zero USB sticks, zero virus hazards.
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-white border border-brand-100 shadow-sm">
-                  <div className="w-6 h-6 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0 mt-0.5 font-bold text-xs">
-                    ✓
-                  </div>
+                <div className="border-t border-[#EEF0F2] pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-[#FFE1D3] text-[#D9430F] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">✓</span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900">Real-Time Progress & Express Pickup Pass</h4>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
-                      Receive an instant push notification the second your document is bound. Flash your token and collect in under 30 seconds.
-                    </p>
+                    <span className="font-medium text-[#0F1115]">Sub-Millimeter Finishing Calibration:</span> Choose single/double-sided, spiral, hardcover, or staple with instant live visual review.
+                  </div>
+                </div>
+
+                <div className="border-t border-[#EEF0F2] pt-3 flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-[#FFE1D3] text-[#D9430F] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">✓</span>
+                  <div>
+                    <span className="font-medium text-[#0F1115]">Instant Token Verification Code:</span> Flash your code (`PRN-8842`) and collect your bound printout immediately.
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 pt-4 border-t border-slate-200/80 flex items-center justify-between text-xs font-mono text-emerald-700">
-              <span>COUNTER PICKUP TIME:</span>
-              <strong className="text-emerald-800 font-extrabold text-sm">&lt; 30 seconds</strong>
+            <div className="mt-8 pt-4 border-t border-[#EEF0F2] flex items-center justify-between font-mono text-[11px] text-[#FF5A1F]">
+              <span>AVERAGE COUNTER TURNAROUND</span>
+              <span className="font-bold text-sm">30 SECONDS TOTAL</span>
             </div>
           </div>
 
+        </div>
+
+        {/* Triple Stat Counter Strip */}
+        <div className="mt-12 pt-10 border-t border-[#C4C9CF]/60 grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <div>
+            <div className="font-sans font-light text-4xl sm:text-5xl text-[#0F1115] tracking-tight">−42 min</div>
+            <div className="font-mono text-xs text-[#7A7F88] mt-1 uppercase">Queue Latency Eliminated</div>
+          </div>
+          <div>
+            <div className="font-sans font-light text-4xl sm:text-5xl text-[#0F1115] tracking-tight">100%</div>
+            <div className="font-mono text-xs text-[#7A7F88] mt-1 uppercase">USB Stick Free Remote Upload</div>
+          </div>
+          <div>
+            <div className="font-sans font-light text-4xl sm:text-5xl text-[#0F1115] tracking-tight">₹1.50</div>
+            <div className="font-mono text-xs text-[#7A7F88] mt-1 uppercase">Standardized B&W Laser Rate</div>
+          </div>
         </div>
 
       </div>

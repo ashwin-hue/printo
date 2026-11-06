@@ -4,18 +4,13 @@ import {
   FileText, 
   Check, 
   AlertCircle, 
-  Sparkles, 
   ArrowRight, 
   Trash2, 
-  Layers, 
-  Sliders, 
-  FileCheck,
   ChevronLeft,
-  Info,
   Clock,
   Printer,
   ShieldCheck,
-  CheckCircle2
+  FileCheck
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { 
@@ -75,8 +70,8 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Configuration options
-  const [copies, setCopies] = useState<number>(1);
+  // Print Configuration state
+  const [copies, setCopies] = useState<number>(2);
   const [colorMode, setColorMode] = useState<ColorMode>('bw');
   const [paperSize, setPaperSize] = useState<PaperSize>('A4');
   const [sides, setSides] = useState<Sides>('double');
@@ -85,68 +80,78 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   const [customPageRange, setCustomPageRange] = useState<string>('1-32');
   const [bindingType, setBindingType] = useState<BindingType>('spiral');
   const [lamination, setLamination] = useState<boolean>(false);
-  const [specialInstructions, setSpecialInstructions] = useState<string>('');
+  const [specialInstructions, setSpecialInstructions] = useState<string>(
+    'Please ensure clear margin on spine for spiral wire binding.'
+  );
 
-  // Calculate pages to print based on page range
-  const calculateEffectivePages = (): number => {
+  // Calculate effective pages
+  const calculatePagesFromRange = (): number => {
     if (!docMetadata) return 0;
     if (pageRangeMode === 'all') return docMetadata.pageCount;
 
     try {
       const parts = customPageRange.split(',').map(p => p.trim());
       let count = 0;
-      parts.forEach(part => {
+      for (const part of parts) {
         if (part.includes('-')) {
-          const [start, end] = part.split('-').map(n => parseInt(n));
+          const [start, end] = part.split('-').map(Number);
           if (!isNaN(start) && !isNaN(end) && end >= start) {
-            count += (end - start + 1);
+            count += Math.min(docMetadata.pageCount, end) - Math.max(1, start) + 1;
           }
         } else {
-          const num = parseInt(part);
-          if (!isNaN(num)) count += 1;
+          const page = Number(part);
+          if (!isNaN(page) && page >= 1 && page <= docMetadata.pageCount) {
+            count += 1;
+          }
         }
-      });
-      return Math.max(1, Math.min(count, docMetadata.pageCount * 2));
+      }
+      return count > 0 ? count : docMetadata.pageCount;
     } catch {
       return docMetadata.pageCount;
     }
   };
 
-  const effectivePageCount = calculateEffectivePages();
+  const effectivePageCount = calculatePagesFromRange();
 
-  // Price Calculation
+  // Pricing formula
   const baseRate = colorMode === 'bw' ? pricing.black_white_price : pricing.color_price;
-  const paperMult = pricing.paper_size_multipliers[paperSize] || 1.0;
-  const sideDiscount = sides === 'double' ? pricing.double_sided_discount : 0.0;
-  const effectivePerPage = Math.max(0.5, (baseRate - sideDiscount) * paperMult);
+  const paperMultiplier = pricing.paper_size_multipliers[paperSize] || 1.0;
+  const doubleDiscount = sides === 'double' ? pricing.double_sided_discount : 0.0;
+  const pricePerPage = Math.max(0.5, (baseRate - doubleDiscount) * paperMultiplier);
 
-  const printSubtotal = effectivePageCount * copies * effectivePerPage;
+  const printSubtotal = effectivePageCount * copies * pricePerPage;
   const bindingCost = bindingType === 'spiral' 
     ? pricing.binding_price 
     : bindingType === 'stapling' 
-      ? pricing.stapling_price 
-      : bindingType === 'hardcover' 
-        ? 120 
-        : 0;
+    ? pricing.stapling_price 
+    : bindingType === 'hardcover' 
+    ? 120 
+    : 0;
 
-  const finishingCost = (lamination ? pricing.lamination_price : 0) * copies;
-  const subtotalBeforeTax = printSubtotal + bindingCost + finishingCost;
-  const taxes = subtotalBeforeTax * 0.05;
-  const grandTotal = Math.round((subtotalBeforeTax + taxes) * 100) / 100;
+  const finishingCost = lamination ? (pricing.lamination_price * copies) : 0;
+  const orderSubtotal = printSubtotal + bindingCost + finishingCost;
+  const taxes = orderSubtotal * 0.05;
+  const grandTotal = orderSubtotal + taxes;
 
-  // Handle Real File Upload
+  // File Upload Handler
   const handleFileUpload = async (file: File) => {
-    setParseError(null);
+    if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+      setParseError('Only PDF documents are supported for high-precision laser printing.');
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      setParseError('File size exceeds 50MB limit.');
+      return;
+    }
+
     setIsParsing(true);
+    setParseError(null);
+
     try {
       const meta = await parsePdfFile(file);
       setDocumentFile(file);
-      setDocMetadata({
-        fileName: meta.fileName,
-        pageCount: meta.pageCount,
-        fileSize: meta.fileSize,
-        dataUrl: meta.dataUrl,
-      });
+      setDocMetadata(meta);
       setCustomPageRange(`1-${meta.pageCount}`);
     } catch (err: any) {
       setParseError(err.message || 'Failed to read PDF document. Please verify the file.');
@@ -155,7 +160,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
     }
   };
 
-  // Preset quick-sample documents for instant 1-click testing
   const loadPreset = (preset: 'record' | 'abstract' | 'thesis') => {
     if (preset === 'record') {
       setDocMetadata({
@@ -187,7 +191,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
     }
   };
 
-  // Submit Order
   const handleSubmitOrder = () => {
     if (!docMetadata) {
       setParseError('Please upload or select a document to print.');
@@ -240,7 +243,6 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
 
     createOrder(newOrder);
 
-    // Trigger celebration confetti
     try {
       confetti({
         particleCount: 120,
@@ -253,21 +255,21 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
   };
 
   return (
-    <div className="py-12 bg-dot-subtle min-h-[calc(100vh-80px)]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-12 bg-[#EEF0F2] text-[#0F1115] min-h-[calc(100vh-64px)]">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw] space-y-8">
         
         {/* Navigation Breadcrumb */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-200/80">
+        <div className="flex items-center justify-between pb-4 border-b border-[#C4C9CF]/60">
           <button
             onClick={onCancel}
-            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-1.5 font-sans text-xs text-[#2A2E35] hover:text-[#0F1115] transition-colors"
           >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Directory
+            <ChevronLeft className="w-4 h-4 text-[#FF5A1F]" />
+            <span>Return to Overview</span>
           </button>
 
-          <span className="text-xs font-mono font-bold text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200">
-            DISPATCH PIPELINE // CALIBRATION MODE
+          <span className="font-mono text-xs text-[#0F1115] bg-[#FFE1D3] px-3 py-1 rounded-full font-bold">
+            CALIBRATION PROTOCOL // DIRECT LASER ROUTE
           </span>
         </div>
 
@@ -276,50 +278,49 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
           {/* Main Form: Left 8 Columns */}
           <div className="lg:col-span-8 space-y-6">
             
-            {/* Step 1: Select Target Shop */}
-            <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-slate-200/80 shadow-premium space-y-4">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            {/* Step 1: Destination Hub */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#C4C9CF] shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-4 border-b border-[#EEF0F2]">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold bg-brand-700 text-white px-3 py-1 rounded-xl shadow-sm">
+                  <span className="font-mono text-xs font-bold bg-[#0F1115] text-white px-3 py-1 rounded-full">
                     NODE 01
                   </span>
                   <div>
-                    <h3 className="font-display font-black text-lg text-slate-900">
+                    <h3 className="font-serif font-normal text-xl text-[#0F1115]">
                       Destination Printing Hub
                     </h3>
-                    <p className="text-xs text-slate-500 font-mono">Routing print job to verified hardware</p>
+                    <p className="font-mono text-xs text-[#7A7F88]">Routing payload to hardware destination</p>
                   </div>
                 </div>
-                <span className="text-xs font-mono text-emerald-600 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="font-mono text-xs text-[#FF5A1F] font-bold">
                   {currentShop.distance}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {shops.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => setSelectedShopId(s.id)}
                     className={`p-4 rounded-2xl border text-left transition-all ${
                       selectedShopId === s.id
-                        ? 'border-brand-600 bg-brand-50/60 ring-2 ring-brand-500/20'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                        ? 'border-[#FF5A1F] bg-[#FFE1D3]/30 shadow-sm'
+                        : 'border-[#C4C9CF] hover:border-[#8B9098] bg-white'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <strong className="text-xs font-bold text-slate-900 block truncate">
+                      <strong className="font-sans text-xs font-semibold text-[#0F1115] block truncate">
                         {s.shop_name}
                       </strong>
-                      <span className="text-[10px] font-mono text-brand-700 font-bold">
+                      <span className="font-mono text-[10px] text-[#FF5A1F]">
                         {s.distance}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5 truncate">{s.address}</p>
-                    <div className="mt-2.5 flex items-center gap-2 text-[10px] font-mono text-slate-600">
-                      <span className="font-bold text-slate-900">₹{getShopPricing(s.id).black_white_price}/pg</span>
+                    <p className="font-sans text-[11px] text-[#7A7F88] mt-0.5 truncate">{s.address}</p>
+                    <div className="mt-2 flex items-center gap-2 font-mono text-[10px] text-[#2A2E35]">
+                      <span>₹{getShopPricing(s.id).black_white_price}/pg</span>
                       <span>•</span>
-                      <span>~{s.avg_turnaround_mins}m queue</span>
+                      <span>~{s.avg_turnaround_mins}m turnaround</span>
                     </div>
                   </button>
                 ))}
@@ -327,23 +328,23 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
             </div>
 
             {/* Step 2: Upload Document */}
-            <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-slate-200/80 shadow-premium space-y-5">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#C4C9CF] shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-4 border-b border-[#EEF0F2]">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold bg-brand-700 text-white px-3 py-1 rounded-xl shadow-sm">
+                  <span className="font-mono text-xs font-bold bg-[#0F1115] text-white px-3 py-1 rounded-full">
                     NODE 02
                   </span>
                   <div>
-                    <h3 className="font-display font-black text-lg text-slate-900">
+                    <h3 className="font-serif font-normal text-xl text-[#0F1115]">
                       Document Payload & Inspection
                     </h3>
-                    <p className="text-xs text-slate-500 font-mono">Real-time PDF.js client-side page parser</p>
+                    <p className="font-mono text-xs text-[#7A7F88]">Real-time PDF.js client-side page extraction</p>
                   </div>
                 </div>
-                <span className="text-xs text-slate-500 font-mono font-bold">PDF UP TO 50MB</span>
+                <span className="font-mono text-xs text-[#8B9098]">PDF UP TO 50MB</span>
               </div>
 
-              {/* Drag and Drop Box */}
+              {/* Drag and Drop Zone */}
               <div
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
@@ -353,7 +354,7 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                     handleFileUpload(e.dataTransfer.files[0]);
                   }
                 }}
-                className="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-3xl p-8 text-center cursor-pointer bg-slate-50/50 hover:bg-brand-50/20 transition-all group"
+                className="border-2 border-dashed border-[#C4C9CF] hover:border-[#FF5A1F] rounded-2xl p-8 text-center cursor-pointer bg-[#EEF0F2]/50 hover:bg-[#FFE1D3]/20 transition-all group"
               >
                 <input
                   type="file"
@@ -367,46 +368,46 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   }}
                 />
 
-                <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center mx-auto text-brand-700 group-hover:scale-110 group-hover:bg-brand-600 group-hover:text-white transition-all">
-                  <Upload className="w-7 h-7" />
+                <div className="w-12 h-12 rounded-xl bg-white border border-[#C4C9CF] flex items-center justify-center mx-auto text-[#FF5A1F] group-hover:scale-105 transition-all">
+                  <Upload className="w-5 h-5" />
                 </div>
 
-                <p className="mt-4 font-display font-bold text-sm text-slate-900">
-                  {isParsing ? 'Inspecting PDF page telemetry...' : 'Click to upload or drag & drop your PDF'}
+                <p className="mt-3 font-sans font-medium text-xs sm:text-sm text-[#0F1115]">
+                  {isParsing ? 'Extracting page telemetry...' : 'Click to select or drag & drop your PDF file'}
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Academic practical records, lab assignments, project reports, or CAD drawings
+                <p className="font-mono text-[11px] text-[#7A7F88] mt-1">
+                  Lab records, thesis drafts, lecture slides, CAD blueprints
                 </p>
               </div>
 
-              {/* Parse Error Notification */}
+              {/* Error Alert */}
               {parseError && (
-                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 font-sans text-xs flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{parseError}</span>
                 </div>
               )}
 
-              {/* Document Loaded Preview Pill */}
+              {/* Document Loaded Preview */}
               {docMetadata && (
-                <div className="p-4 rounded-2xl bg-brand-50/70 border border-brand-200/80 flex items-center justify-between">
+                <div className="p-4 rounded-2xl bg-[#EEF0F2] border border-[#C4C9CF] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-brand-600 text-white flex items-center justify-center font-bold">
-                      <FileCheck className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-xl bg-[#0F1115] text-white flex items-center justify-center">
+                      <FileCheck className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="font-bold text-xs sm:text-sm text-slate-900 truncate max-w-[200px] sm:max-w-md">
+                      <p className="font-sans font-medium text-xs sm:text-sm text-[#0F1115] truncate max-w-[200px] sm:max-w-md">
                         {docMetadata.fileName}
                       </p>
-                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
-                        {docMetadata.pageCount} Pages • {(docMetadata.fileSize / 1024 / 1024).toFixed(2)} MB • Verified PDF
+                      <p className="font-mono text-[10px] text-[#7A7F88] mt-0.5">
+                        {docMetadata.pageCount} Pages • {(docMetadata.fileSize / 1024 / 1024).toFixed(2)} MB • Verified PDF Payload
                       </p>
                     </div>
                   </div>
 
                   <button
                     onClick={() => setDocMetadata(null)}
-                    className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                    className="p-2 text-[#8B9098] hover:text-rose-600 transition-colors"
                     title="Remove document"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -414,162 +415,164 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                 </div>
               )}
 
-              {/* Preset 1-Click Test Documents */}
+              {/* Preset Sample Documents */}
               <div className="pt-2">
-                <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider block mb-2">
-                  Or test with 1-click sample documents:
+                <span className="font-mono text-[11px] text-[#7A7F88] uppercase tracking-wider block mb-2">
+                  Or test with 1-click preset academic files:
                 </span>
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => loadPreset('record')}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:border-brand-500 bg-white text-xs font-semibold text-slate-700 hover:text-brand-700 transition-all"
+                    className="h-7 px-3 rounded-full border border-[#C4C9CF] bg-white text-xs font-mono text-[#2A2E35] hover:border-[#FF5A1F] transition-all"
                   >
-                    📘 Lab Practical Record (36 pgs)
+                    Lab Record (36 pgs)
                   </button>
                   <button
                     onClick={() => loadPreset('abstract')}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:border-brand-500 bg-white text-xs font-semibold text-slate-700 hover:text-brand-700 transition-all"
+                    className="h-7 px-3 rounded-full border border-[#C4C9CF] bg-white text-xs font-mono text-[#2A2E35] hover:border-[#FF5A1F] transition-all"
                   >
-                    📄 Project Abstract (6 pgs)
+                    Project Abstract (6 pgs)
                   </button>
                   <button
                     onClick={() => loadPreset('thesis')}
-                    className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:border-brand-500 bg-white text-xs font-semibold text-slate-700 hover:text-brand-700 transition-all"
+                    className="h-7 px-3 rounded-full border border-[#C4C9CF] bg-white text-xs font-mono text-[#2A2E35] hover:border-[#FF5A1F] transition-all"
                   >
-                    📚 Capstone Thesis (84 pgs)
+                    Thesis (84 pgs)
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Step 3: Configure Print Specifications */}
-            <div className="bg-white rounded-[32px] p-6 sm:p-8 border border-slate-200/80 shadow-premium space-y-6">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#C4C9CF] shadow-sm space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-[#EEF0F2]">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold bg-brand-700 text-white px-3 py-1 rounded-xl shadow-sm">
+                  <span className="font-mono text-xs font-bold bg-[#0F1115] text-white px-3 py-1 rounded-full">
                     NODE 03
                   </span>
                   <div>
-                    <h3 className="font-display font-black text-lg text-slate-900">
+                    <h3 className="font-serif font-normal text-xl text-[#0F1115]">
                       Laser & Finishing Calibration
                     </h3>
-                    <p className="text-xs text-slate-500 font-mono">Configures machine paper feed, orientation and binding</p>
+                    <p className="font-mono text-xs text-[#7A7F88]">Configures feed, duplexing, and bind hardware</p>
                   </div>
                 </div>
-                <span className="text-xs text-slate-500 font-mono font-bold">HARDWARE SPECS</span>
+                <span className="font-mono text-xs text-[#8B9098]">HARDWARE SPECS</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 
-                {/* Copies Count */}
+                {/* Copies */}
                 <div>
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
                     Copies Required
                   </label>
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setCopies(Math.max(1, copies - 1))}
-                      className="w-11 h-11 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 font-black text-lg hover:bg-slate-100 transition-colors"
+                      className="w-9 h-9 rounded-full border border-[#C4C9CF] bg-[#EEF0F2] text-[#0F1115] font-mono text-base hover:bg-slate-200 transition-colors"
                     >
                       -
                     </button>
-                    <span className="font-display font-black text-2xl text-slate-900 w-12 text-center">
+                    <span className="font-sans font-light text-2xl text-[#0F1115] w-10 text-center">
                       {copies}
                     </span>
                     <button
                       onClick={() => setCopies(copies + 1)}
-                      className="w-11 h-11 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 font-black text-lg hover:bg-slate-100 transition-colors"
+                      className="w-9 h-9 rounded-full border border-[#C4C9CF] bg-[#EEF0F2] text-[#0F1115] font-mono text-base hover:bg-slate-200 transition-colors"
                     >
                       +
                     </button>
-                    <span className="text-xs text-slate-500 font-medium ml-2 font-mono">
-                      ({copies * effectivePageCount} total pages)
+                    <span className="font-mono text-xs text-[#7A7F88] ml-2">
+                      ({copies * effectivePageCount} total pgs)
                     </span>
                   </div>
                 </div>
 
                 {/* Color Mode */}
                 <div>
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
-                    Color Calibration
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
+                    Color Mode
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setColorMode('bw')}
-                      className={`p-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between ${
+                      className={`p-2.5 rounded-xl border text-xs font-sans text-left transition-all ${
                         colorMode === 'bw'
-                          ? 'border-brand-600 bg-brand-50 text-brand-900 ring-2 ring-brand-500/20'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'border-[#0F1115] bg-[#0F1115] text-white'
+                          : 'border-[#C4C9CF] text-[#2A2E35] hover:bg-[#EEF0F2]'
                       }`}
                     >
-                      <span>B&W Laser</span>
-                      <span className="font-mono text-[10px] text-brand-700">₹{pricing.black_white_price}/pg</span>
+                      <div className="font-medium">B&W Laser</div>
+                      <div className="font-mono text-[10px] opacity-80 mt-0.5">₹{pricing.black_white_price}/pg</div>
                     </button>
+
                     <button
                       onClick={() => setColorMode('color')}
-                      className={`p-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between ${
+                      className={`p-2.5 rounded-xl border text-xs font-sans text-left transition-all ${
                         colorMode === 'color'
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-500/20'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'border-[#0F1115] bg-[#0F1115] text-white'
+                          : 'border-[#C4C9CF] text-[#2A2E35] hover:bg-[#EEF0F2]'
                       }`}
                     >
-                      <span>Color Gloss</span>
-                      <span className="font-mono text-[10px] text-indigo-700">₹{pricing.color_price}/pg</span>
+                      <div className="font-medium">Color Gloss</div>
+                      <div className="font-mono text-[10px] opacity-80 mt-0.5">₹{pricing.color_price}/pg</div>
                     </button>
                   </div>
                 </div>
 
-                {/* Sides: Single vs Double */}
+                {/* Sides */}
                 <div>
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
-                    Paper Feed Sides
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
+                    Sides Feed
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setSides('double')}
-                      className={`p-3 rounded-2xl border text-xs font-bold text-center ${
+                      className={`p-2.5 rounded-xl border text-xs font-sans text-left transition-all ${
                         sides === 'double'
-                          ? 'border-brand-600 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'border-[#0F1115] bg-[#0F1115] text-white'
+                          : 'border-[#C4C9CF] text-[#2A2E35] hover:bg-[#EEF0F2]'
                       }`}
                     >
-                      <span>Double-Sided</span>
-                      <span className="block text-[10px] font-mono font-normal text-emerald-600 mt-0.5">Saves paper & fee</span>
+                      <div className="font-medium">Double-Sided</div>
+                      <div className="font-mono text-[10px] text-[#FF5A1F] mt-0.5">Saves paper & fee</div>
                     </button>
+
                     <button
                       onClick={() => setSides('single')}
-                      className={`p-3 rounded-2xl border text-xs font-bold text-center ${
+                      className={`p-2.5 rounded-xl border text-xs font-sans text-left transition-all ${
                         sides === 'single'
-                          ? 'border-brand-600 bg-brand-50 text-brand-900 ring-1 ring-brand-500'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                          ? 'border-[#0F1115] bg-[#0F1115] text-white'
+                          : 'border-[#C4C9CF] text-[#2A2E35] hover:bg-[#EEF0F2]'
                       }`}
                     >
-                      <span>Single-Sided</span>
-                      <span className="block text-[10px] font-mono font-normal text-slate-500 mt-0.5">Standard leaf</span>
+                      <div className="font-medium">Single-Sided</div>
+                      <div className="font-mono text-[10px] opacity-80 mt-0.5">Standard leaf</div>
                     </button>
                   </div>
                 </div>
 
-                {/* Paper Size & Orientation */}
+                {/* Size & Orientation */}
                 <div>
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
                     Paper Size & Orientation
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={paperSize}
                       onChange={(e) => setPaperSize(e.target.value as PaperSize)}
-                      className="p-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-brand-500/20"
+                      className="h-10 px-3 rounded-xl border border-[#C4C9CF] text-xs font-mono text-[#0F1115] bg-white focus:outline-none focus:border-[#FF5A1F]"
                     >
                       <option value="A4">A4 (Standard)</option>
-                      <option value="A3">A3 (Cad / Poster)</option>
-                      <option value="Letter">Letter Format</option>
+                      <option value="A3">A3 (Plot/Poster)</option>
+                      <option value="Letter">Letter</option>
                     </select>
 
                     <select
                       value={orientation}
                       onChange={(e) => setOrientation(e.target.value as Orientation)}
-                      className="p-3 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-brand-500/20"
+                      className="h-10 px-3 rounded-xl border border-[#C4C9CF] text-xs font-mono text-[#0F1115] bg-white focus:outline-none focus:border-[#FF5A1F]"
                     >
                       <option value="portrait">Portrait</option>
                       <option value="landscape">Landscape</option>
@@ -577,34 +580,32 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                   </div>
                 </div>
 
-                {/* Page Range Selection */}
+                {/* Page Range */}
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
-                    Page Range Selection
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
+                    Page Range
                   </label>
-                  <div className="flex flex-col sm:flex-row items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setPageRangeMode('all')}
-                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border ${
-                          pageRangeMode === 'all'
-                            ? 'bg-brand-50 border-brand-600 text-brand-900'
-                            : 'border-slate-200 text-slate-600'
-                        }`}
-                      >
-                        Print All ({docMetadata?.pageCount || 0} pages)
-                      </button>
-                      <button
-                        onClick={() => setPageRangeMode('custom')}
-                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border ${
-                          pageRangeMode === 'custom'
-                            ? 'bg-brand-50 border-brand-600 text-brand-900'
-                            : 'border-slate-200 text-slate-600'
-                        }`}
-                      >
-                        Custom Range
-                      </button>
-                    </div>
+                  <div className="flex flex-col sm:flex-row items-center gap-2">
+                    <button
+                      onClick={() => setPageRangeMode('all')}
+                      className={`h-9 px-4 rounded-full font-mono text-xs transition-all ${
+                        pageRangeMode === 'all'
+                          ? 'bg-[#0F1115] text-white'
+                          : 'border border-[#C4C9CF] text-[#2A2E35]'
+                      }`}
+                    >
+                      Print All ({docMetadata?.pageCount || 0} pgs)
+                    </button>
+                    <button
+                      onClick={() => setPageRangeMode('custom')}
+                      className={`h-9 px-4 rounded-full font-mono text-xs transition-all ${
+                        pageRangeMode === 'custom'
+                          ? 'bg-[#0F1115] text-white'
+                          : 'border border-[#C4C9CF] text-[#2A2E35]'
+                      }`}
+                    >
+                      Custom Range
+                    </button>
 
                     {pageRangeMode === 'custom' && (
                       <input
@@ -612,63 +613,63 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
                         value={customPageRange}
                         onChange={(e) => setCustomPageRange(e.target.value)}
                         placeholder="e.g. 1-10, 14, 20-32"
-                        className="flex-1 w-full p-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                        className="flex-1 h-9 px-3 rounded-full border border-[#C4C9CF] font-mono text-xs text-[#0F1115] focus:outline-none focus:border-[#FF5A1F]"
                       />
                     )}
                   </div>
                 </div>
 
-                {/* Binding & Finishing */}
+                {/* Binding */}
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
-                    Binding & Finishing
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
+                    Finishing & Binding
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      { id: 'none', label: 'No Binding', price: 'Free' },
-                      { id: 'stapling', label: 'Stapling', price: `₹${pricing.stapling_price}` },
+                      { id: 'none', label: 'None', price: '₹0' },
+                      { id: 'stapling', label: 'Corner Staple', price: `₹${pricing.stapling_price}` },
                       { id: 'spiral', label: 'Spiral Wire', price: `₹${pricing.binding_price}` },
                       { id: 'hardcover', label: 'Hardcover Thesis', price: '₹120' },
                     ].map((b) => (
                       <button
                         key={b.id}
                         onClick={() => setBindingType(b.id as BindingType)}
-                        className={`p-3.5 rounded-2xl border text-center transition-all ${
+                        className={`p-3 rounded-xl border text-left transition-all ${
                           bindingType === b.id
-                            ? 'border-brand-600 bg-brand-50 text-brand-900 ring-2 ring-brand-500/20 font-bold'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                            ? 'border-[#FF5A1F] bg-[#FFE1D3]/50 text-[#0F1115]'
+                            : 'border-[#C4C9CF] text-[#2A2E35] hover:bg-[#EEF0F2]'
                         }`}
                       >
-                        <p className="text-xs">{b.label}</p>
-                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">{b.price}</p>
+                        <p className="font-medium text-xs truncate">{b.label}</p>
+                        <p className="font-mono text-[10px] text-[#7A7F88] mt-0.5">{b.price}</p>
                       </button>
                     ))}
                   </div>
 
-                  <div className="mt-3.5 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                    <label className="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer">
+                  <div className="mt-3 p-3 rounded-xl bg-[#EEF0F2] border border-[#C4C9CF]/60">
+                    <label className="flex items-center gap-2 text-xs font-sans text-[#2A2E35] cursor-pointer">
                       <input
                         type="checkbox"
                         checked={lamination}
                         onChange={(e) => setLamination(e.target.checked)}
-                        className="rounded text-brand-600 focus:ring-brand-500"
+                        className="rounded accent-[#FF5A1F]"
                       />
-                      <span className="font-semibold">Add Thermal Lamination to Outer Covers (+₹{pricing.lamination_price})</span>
+                      <span>Thermal lamination on outer front/back covers (+₹{pricing.lamination_price})</span>
                     </label>
                   </div>
                 </div>
 
-                {/* Special Instructions for Shop Owner */}
+                {/* Special Instructions */}
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-2">
-                    Special Instructions for Shop Owner (Optional)
+                  <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-2">
+                    Operator Instructions (Optional)
                   </label>
                   <textarea
                     rows={2}
                     value={specialInstructions}
                     onChange={(e) => setSpecialInstructions(e.target.value)}
-                    placeholder="e.g. Ensure clear margin on left for spiral binding spine. Staple top-left corner firmly."
-                    className="w-full p-3 rounded-2xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                    placeholder="e.g. Ensure clear left margin for spiral wire. Center double-sided pages."
+                    className="w-full p-3 rounded-xl border border-[#C4C9CF] font-sans text-xs text-[#0F1115] focus:outline-none focus:border-[#FF5A1F]"
                   />
                 </div>
 
@@ -678,84 +679,84 @@ export const OrderWizard: React.FC<OrderWizardProps> = ({
           </div>
 
           {/* Right Column: Order Summary & Checkout Card */}
-          <div className="lg:col-span-4 sticky top-28 space-y-4">
-            <div className="bg-white rounded-[32px] p-6 sm:p-7 border border-slate-200/80 shadow-2xl space-y-5">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 className="font-display font-extrabold text-base text-slate-900">
-                  Order Summary
+          <div className="lg:col-span-4 sticky top-24 space-y-4">
+            <div className="bg-white rounded-3xl p-6 sm:p-7 border border-[#C4C9CF] shadow-sm space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-[#EEF0F2]">
+                <h3 className="font-serif font-normal text-xl text-[#0F1115]">
+                  Order Telemetry
                 </h3>
-                <span className="text-[10px] font-mono bg-brand-50 text-brand-700 px-2 py-0.5 rounded font-bold">
-                  LIVE ESTIMATE
+                <span className="font-mono text-[10px] bg-[#FFE1D3] text-[#D9430F] px-2 py-0.5 rounded-full font-bold">
+                  VERIFIED
                 </span>
               </div>
 
-              {/* Itemized breakdown */}
-              <div className="space-y-3 text-xs text-slate-600">
+              {/* Itemized lines */}
+              <div className="space-y-2.5 font-sans text-xs text-[#2A2E35]">
                 <div className="flex justify-between">
-                  <span>Printing Shop</span>
-                  <strong className="text-slate-900 truncate max-w-[150px]">{currentShop.shop_name}</strong>
+                  <span className="text-[#7A7F88]">Shop Hub</span>
+                  <span className="font-medium text-[#0F1115] truncate max-w-[150px]">{currentShop.shop_name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Document</span>
-                  <strong className="text-slate-900 truncate max-w-[150px]">{docMetadata?.fileName || 'None'}</strong>
+                  <span className="text-[#7A7F88]">File</span>
+                  <span className="font-medium text-[#0F1115] truncate max-w-[150px]">{docMetadata?.fileName || 'None'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Pages to print</span>
-                  <strong className="text-slate-900 font-mono">{effectivePageCount} pgs × {copies} copy = {effectivePageCount * copies} pgs</strong>
+                  <span className="text-[#7A7F88]">Pages</span>
+                  <span className="font-mono text-[#0F1115]">{effectivePageCount} pgs × {copies} = {effectivePageCount * copies} pgs</span>
+                </div>
+                <div className="flex justify-between border-t border-[#EEF0F2] pt-2">
+                  <span className="text-[#7A7F88]">Laser Print</span>
+                  <span className="font-mono font-medium text-[#0F1115]">₹{printSubtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Paper & Laser Print</span>
-                  <span className="font-mono font-bold text-slate-900">₹{printSubtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Binding ({bindingType})</span>
-                  <span className="font-mono font-bold text-slate-900">₹{bindingCost.toFixed(2)}</span>
+                  <span className="text-[#7A7F88]">Binding ({bindingType})</span>
+                  <span className="font-mono font-medium text-[#0F1115]">₹{bindingCost.toFixed(2)}</span>
                 </div>
                 {finishingCost > 0 && (
                   <div className="flex justify-between">
-                    <span>Lamination</span>
-                    <span className="font-mono font-bold text-slate-900">₹{finishingCost.toFixed(2)}</span>
+                    <span className="text-[#7A7F88]">Lamination</span>
+                    <span className="font-mono font-medium text-[#0F1115]">₹{finishingCost.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-slate-400">
-                  <span>GST & Service (5%)</span>
+                <div className="flex justify-between text-[#8B9098]">
+                  <span>Tax & GST (5%)</span>
                   <span className="font-mono">₹{taxes.toFixed(2)}</span>
                 </div>
               </div>
 
               {/* Total Banner */}
-              <div className="pt-4 border-t border-slate-100 flex items-baseline justify-between">
+              <div className="pt-4 border-t border-[#EEF0F2] flex items-baseline justify-between">
                 <div>
-                  <span className="text-xs text-slate-500 font-medium block">Total Payable</span>
-                  <span className="text-[10px] text-emerald-600 font-semibold">Pay at counter or online</span>
+                  <span className="font-mono text-[10px] uppercase text-[#7A7F88] block">Total Payable</span>
+                  <span className="font-mono text-[11px] text-emerald-600 font-medium">No counter markup</span>
                 </div>
-                <span className="font-display font-black text-3xl text-brand-700">
+                <span className="font-sans font-light text-3xl sm:text-4xl text-[#0F1115] tracking-tight">
                   ₹{grandTotal.toFixed(2)}
                 </span>
               </div>
 
-              {/* Queue turnaround notice */}
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-600 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-brand-600 shrink-0" />
-                <span>Estimated ready in <strong>~{currentShop.avg_turnaround_mins} minutes</strong> after submission.</span>
+              {/* Turnaround Pill */}
+              <div className="p-3 rounded-xl bg-[#EEF0F2] text-xs font-sans text-[#2A2E35] flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 text-[#FF5A1F] shrink-0" />
+                <span>Estimated ready in <strong>~{currentShop.avg_turnaround_mins} mins</strong> after dispatch.</span>
               </div>
 
-              {/* Submit CTA */}
+              {/* Dispatch Action Button */}
               <button
                 onClick={handleSubmitOrder}
                 disabled={!docMetadata}
-                className={`w-full py-4 px-5 rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                className={`w-full h-11 px-5 rounded-full font-sans font-medium text-xs tracking-wide flex items-center justify-center gap-2 transition-all ${
                   docMetadata
-                    ? 'bg-brand-700 hover:bg-brand-800 text-white shadow-xl shadow-brand-700/25 hover:-translate-y-0.5'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    ? 'bg-[#FF5A1F] hover:bg-[#E84E16] text-white shadow-sm hover:-translate-y-0.5'
+                    : 'bg-[#C4C9CF] text-slate-500 cursor-not-allowed'
                 }`}
               >
-                <span>Confirm & Send to Print Shop</span>
+                <span>Dispatch to Print Hub</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
-              <p className="text-[10px] text-slate-400 text-center font-mono">
-                🔒 Private SSL Pipe • Cancelable before laser start
+              <p className="font-mono text-[10px] text-[#8B9098] text-center">
+                30-second token pass issued upon completion
               </p>
             </div>
           </div>

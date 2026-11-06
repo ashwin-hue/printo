@@ -4,14 +4,12 @@ import {
   MapPin, 
   Phone, 
   FileText, 
-  CheckCircle2, 
+  Check, 
   AlertCircle, 
-  Receipt, 
   X, 
   ArrowRight,
   ExternalLink,
   Printer,
-  ChevronRight,
   Sparkles,
   RefreshCw,
   QrCode
@@ -67,14 +65,13 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({
     }
   };
 
-  // Step index calculation for progress bar
   const getStepStatus = (status: OrderStatus) => {
-    const steps: { label: string; desc: string; icon: string }[] = [
-      { label: 'Submitted', desc: 'Order placed & awaiting shop review', icon: '📝' },
-      { label: 'Accepted', desc: 'Shop verified & queued in laser queue', icon: '⚡' },
-      { label: 'Printing', desc: 'Running on high-speed press', icon: '🖨️' },
-      { label: 'Ready for Pickup', desc: 'Bound and waiting at express counter', icon: '🎉' },
-      { label: 'Completed', desc: 'Collected by student', icon: '✨' },
+    const steps = [
+      { label: 'Submitted', desc: 'Awaiting operator review' },
+      { label: 'Accepted', desc: 'In queue for laser press' },
+      { label: 'Printing', desc: 'Running on 1200 DPI engine' },
+      { label: 'Ready for Pickup', desc: 'At express counter desk' },
+      { label: 'Completed', desc: 'Collected by student' },
     ];
 
     let currentIdx = 0;
@@ -90,19 +87,19 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({
 
   if (orders.length === 0) {
     return (
-      <div className="py-20 text-center max-w-lg mx-auto px-4">
-        <div className="w-16 h-16 rounded-3xl bg-brand-50 text-brand-700 flex items-center justify-center mx-auto mb-4">
-          <Clock className="w-8 h-8" />
+      <div className="py-24 text-center max-w-lg mx-auto px-4 bg-[#EEF0F2] min-h-[calc(100vh-64px)] flex flex-col items-center justify-center">
+        <div className="w-14 h-14 rounded-2xl bg-white border border-[#C4C9CF] flex items-center justify-center mx-auto mb-4 text-[#FF5A1F]">
+          <Clock className="w-6 h-6" />
         </div>
-        <h2 className="font-display font-extrabold text-2xl text-slate-900">No Orders in Flight</h2>
-        <p className="text-slate-500 text-xs mt-1 mb-6">
-          You haven't submitted any print jobs yet. Drop your academic documents to eliminate counter queues.
+        <h2 className="font-serif font-normal text-2xl sm:text-3xl text-[#0F1115]">No Active Print Payloads</h2>
+        <p className="font-sans text-xs text-[#7A7F88] mt-1.5 mb-6 max-w-sm">
+          You have no documents currently in print queue. Upload a document to skip campus counter queues.
         </p>
         <button
           onClick={onNewOrder}
-          className="px-6 py-3 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-700/20"
+          className="h-10 px-6 rounded-full bg-[#FF5A1F] hover:bg-[#E84E16] text-white font-sans font-medium text-xs shadow-sm transition-all"
         >
-          Start a New Print Job
+          Dispatch a Document
         </button>
       </div>
     );
@@ -111,48 +108,51 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({
   const { steps, currentIdx } = getStepStatus(activeOrder.status);
 
   return (
-    <div className="py-10 bg-dot-subtle min-h-[calc(100vh-80px)]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="py-12 bg-[#EEF0F2] text-[#0F1115] min-h-[calc(100vh-64px)]">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw] space-y-8">
         
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200/80">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-[#C4C9CF]/60">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-mono font-bold uppercase tracking-wider mb-2">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              Live Order Telemetry
+            <div className="font-mono font-medium text-[11.5px] tracking-[0.06em] uppercase text-[#2A2E35] flex items-center gap-2 mb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
+              LIVE TELEMETRY
             </div>
-            <h1 className="font-display font-black text-3xl sm:text-4xl text-slate-900 tracking-tight">
-              Real-Time Order Tracking
+            <h1 className="font-serif font-normal text-3xl sm:text-5xl tracking-[-0.025em] text-[#0F1115]">
+              Real-Time Order Tracking.<br />
+              <em className="italic text-[#0F1115]/90">Monitor laser progress & token codes.</em>
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onNewOrder}
-              className="px-4 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-brand-700/20"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Submit Another Print</span>
-            </button>
-          </div>
+          <button
+            onClick={onNewOrder}
+            className="h-9 px-4 rounded-full bg-[#0F1115] hover:bg-[#FF5A1F] text-white font-sans font-medium text-xs shadow-sm transition-colors flex items-center gap-2 self-start sm:self-auto"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>New Order</span>
+          </button>
         </div>
 
-        {/* Order Selector Pills if multiple orders */}
+        {/* Order Selector Pills */}
         {orders.length > 1 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             {orders.map((o) => (
               <button
                 key={o.id}
                 onClick={() => setSelectedOrderId(o.id)}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all border ${
+                className={`h-8 px-4 rounded-full text-xs font-mono transition-all border whitespace-nowrap flex items-center gap-2 ${
                   activeOrder.id === o.id
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                    ? 'bg-[#0F1115] text-white border-[#0F1115]'
+                    : 'bg-white text-[#2A2E35] border-[#C4C9CF] hover:border-[#8B9098]'
                 }`}
               >
                 <span>{o.order_number}</span>
-                <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] uppercase font-mono ${
-                  o.status === 'ready' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-200'
+                <span className={`px-1.5 py-0.2 rounded text-[10px] uppercase font-bold ${
+                  o.status === 'ready' 
+                    ? 'bg-[#FFE1D3] text-[#D9430F]' 
+                    : o.status === 'printing' 
+                    ? 'bg-amber-100 text-amber-800' 
+                    : 'bg-slate-100 text-slate-600'
                 }`}>
                   {o.status}
                 </span>
@@ -161,258 +161,192 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({
           </div>
         )}
 
-        {/* Main Tracker Card */}
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* Left Column: Progress lifecycle & pickup pass */}
+          {/* Left Column: Progress Lifecycle & Status */}
           <div className="lg:col-span-8 space-y-6">
             
-            {/* Status card */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-premium space-y-8">
+            {/* Status Card */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#C4C9CF] shadow-sm space-y-6">
               
-              {/* Order identifier and status chip */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+              {/* Order ID & Status Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#EEF0F2]">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-display font-black text-2xl text-slate-900">
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-serif font-normal text-3xl text-[#0F1115]">
                       {activeOrder.order_number}
                     </h2>
-                    <span className="text-xs font-mono text-slate-400">
-                      Placed at {new Date(activeOrder.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <span className="font-mono text-xs text-[#7A7F88]">
+                      ID: {activeOrder.id}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 font-medium mt-1">
-                    {activeOrder.document.file_name} • {activeOrder.copies} copy ({activeOrder.total_pages_to_print} pages total)
+                  <p className="font-sans text-xs text-[#7A7F88] mt-1">
+                    Submitted on {new Date(activeOrder.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(activeOrder.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider ${
+                  <span className={`font-mono text-xs px-3 py-1 rounded-full font-bold uppercase ${
                     activeOrder.status === 'ready'
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 animate-pulse'
+                      ? 'bg-[#FFE1D3] text-[#D9430F]'
                       : activeOrder.status === 'printing'
-                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                        : activeOrder.status === 'accepted'
-                          ? 'bg-brand-100 text-brand-800'
-                          : activeOrder.status === 'completed'
-                            ? 'bg-slate-100 text-slate-700'
-                            : activeOrder.status === 'rejected' || activeOrder.status === 'cancelled'
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
+                      ? 'bg-indigo-100 text-indigo-900'
+                      : activeOrder.status === 'completed'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-[#EEF0F2] text-[#2A2E35]'
                   }`}>
-                    ● {activeOrder.status.replace('_', ' ')}
+                    {activeOrder.status === 'ready' ? '⚡ Ready for Pickup' : activeOrder.status}
                   </span>
 
-                  <button
-                    onClick={() => setReceiptOrder(activeOrder)}
-                    className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition-colors"
-                    title="View & Print Official Receipt"
-                  >
-                    <Receipt className="w-4 h-4" />
-                  </button>
+                  {activeOrder.status === 'pending' && (
+                    <button
+                      onClick={() => handleCancelOrder(activeOrder.id)}
+                      className="font-mono text-xs text-rose-600 hover:underline px-2 py-1"
+                    >
+                      Cancel Order
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Progress Steps Indicator */}
-              {currentIdx >= 0 ? (
-                <div className="space-y-6">
-                  <div className="relative">
-                    <div className="hidden sm:block absolute top-5 left-8 right-8 h-1 bg-slate-100 -z-0">
+              {/* 5-Stage Step Progress Visualizer */}
+              <div className="space-y-4">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-[#7A7F88] block">
+                  Laser Dispatch Progress
+                </span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {steps.map((st, sIdx) => {
+                    const isDone = currentIdx > sIdx;
+                    const isCurrent = currentIdx === sIdx;
+                    return (
                       <div
-                        className="h-full bg-brand-600 transition-all duration-700"
-                        style={{ width: `${(currentIdx / (steps.length - 1)) * 100}%` }}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 relative z-10">
-                      {steps.map((st, i) => {
-                        const isDone = i <= currentIdx;
-                        const isCurrent = i === currentIdx;
-
-                        return (
-                          <div key={i} className="flex sm:flex-col items-center sm:text-center gap-3 sm:gap-2">
-                            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm shadow-sm transition-all ${
-                              isDone
-                                ? 'bg-brand-700 text-white shadow-brand-700/20'
-                                : 'bg-slate-100 text-slate-400'
-                            } ${isCurrent ? 'ring-4 ring-brand-100 scale-110' : ''}`}>
-                              {isDone ? (isCurrent ? st.icon : '✓') : i + 1}
-                            </div>
-                            <div>
-                              <p className={`text-xs font-bold leading-tight ${isDone ? 'text-slate-900' : 'text-slate-400'}`}>
-                                {st.label}
-                              </p>
-                              <p className="text-[10px] text-slate-500 mt-0.5 sm:max-w-[120px] mx-auto leading-tight">
-                                {st.desc}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Estimated Pickup Notice Banner */}
-                  <div className="p-4 rounded-2xl bg-brand-50/60 border border-brand-200/80 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-xs">
-                        ⚡
+                        key={st.label}
+                        className={`p-3 rounded-2xl border transition-all ${
+                          isCurrent
+                            ? 'border-[#FF5A1F] bg-[#FFE1D3]/30 text-[#0F1115]'
+                            : isDone
+                            ? 'border-[#C4C9CF] bg-white text-[#0F1115]'
+                            : 'border-[#EEF0F2] bg-[#EEF0F2]/50 text-[#8B9098]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5 font-mono text-[10px]">
+                          <span>0{sIdx + 1}</span>
+                          {isDone ? (
+                            <span className="text-[#FF5A1F] font-bold">✓</span>
+                          ) : isCurrent ? (
+                            <span className="w-2 h-2 rounded-full bg-[#FF5A1F] animate-pulse" />
+                          ) : null}
+                        </div>
+                        <div className="font-sans font-medium text-xs">{st.label}</div>
+                        <div className="font-mono text-[9px] text-[#7A7F88] mt-1 leading-tight">{st.desc}</div>
                       </div>
-                      <div>
-                        <span className="text-[10px] font-mono text-brand-700 uppercase font-bold">Estimated Turnaround</span>
-                        <p className="font-bold text-xs sm:text-sm text-slate-900">
-                          {activeOrder.estimated_pickup_time || 'Calculating queue ETA...'}
-                        </p>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Document Specs Overview */}
+              <div className="border-t border-[#EEF0F2] pt-6 space-y-4">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-[#7A7F88] block">
+                  Document Specifications
+                </span>
+
+                <div className="p-4 rounded-2xl bg-[#EEF0F2] border border-[#C4C9CF] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white border border-[#C4C9CF] flex items-center justify-center text-[#FF5A1F]">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-sans font-medium text-xs text-[#0F1115] truncate max-w-sm">
+                        {activeOrder.document.file_name}
+                      </div>
+                      <div className="font-mono text-[10px] text-[#7A7F88] mt-0.5">
+                        {activeOrder.total_pages_to_print} pages to print • {activeOrder.copies} {activeOrder.copies === 1 ? 'copy' : 'copies'}
                       </div>
                     </div>
-
-                    {activeOrder.status === 'ready' && (
-                      <span className="px-3 py-1 rounded-full bg-emerald-600 text-white text-xs font-bold animate-bounce">
-                        Counter Token #{activeOrder.order_number.replace('PRN-', '')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
-                  <p className="font-bold">This order is {activeOrder.status}.</p>
-                  <p className="mt-1">{activeOrder.rejection_reason || 'Order was stopped.'}</p>
-                </div>
-              )}
-
-              {/* Express Pickup Pass Card */}
-              {activeOrder.status === 'ready' && (
-                <div className="p-6 rounded-3xl bg-gradient-to-tr from-slate-900 to-indigo-950 text-white space-y-4 shadow-xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold tracking-wider">
-                        EXPRESS COUNTER PASS
-                      </span>
-                      <h3 className="font-display font-extrabold text-xl mt-0.5">Ready for Collection</h3>
-                    </div>
-                    <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-                      <QrCode className="w-7 h-7 text-white" />
-                    </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-between">
-                    <div>
-                      <span className="text-[11px] text-slate-300 block">Flash This Token to Operator:</span>
-                      <strong className="font-mono text-2xl font-black tracking-widest text-emerald-300">
-                        {activeOrder.order_number}
-                      </strong>
-                    </div>
-                    <span className="text-xs bg-emerald-500 text-slate-950 font-bold px-3 py-1 rounded-full font-mono">
-                      CONFIRMED
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-[10px] bg-white border border-[#C4C9CF] px-2 py-0.5 rounded-full">
+                      {activeOrder.color_mode === 'bw' ? 'B&W Laser' : 'Vibrant Color'}
+                    </span>
+                    <span className="font-mono text-[10px] bg-white border border-[#C4C9CF] px-2 py-0.5 rounded-full">
+                      {activeOrder.sides === 'double' ? 'Double-Sided' : 'Single'}
+                    </span>
+                    <span className="font-mono text-[10px] bg-white border border-[#C4C9CF] px-2 py-0.5 rounded-full">
+                      {activeOrder.binding_type}
                     </span>
                   </div>
+                </div>
 
-                  <p className="text-xs text-slate-300">
-                    Walk to <strong>{activeOrder.shop_name}</strong> express counter. Your documents are printed, bound, and waiting. Zero queue required.
+                {activeOrder.special_instructions && (
+                  <p className="font-mono text-xs text-[#7A7F88] bg-white p-3 rounded-xl border border-[#C4C9CF]">
+                    Note for shop: "{activeOrder.special_instructions}"
                   </p>
-                </div>
-              )}
-
-              {/* Cancel Button if still Pending */}
-              {activeOrder.status === 'pending' && (
-                <div className="pt-2 flex justify-end">
-                  <button
-                    onClick={() => handleCancelOrder(activeOrder.id)}
-                    className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Cancel this pending order</span>
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
 
             </div>
 
           </div>
 
-          {/* Right Column: Shop & Order Details */}
-          <div className="lg:col-span-4 space-y-6">
+          {/* Right Column: High-Contrast 30-Second Pickup Pass Card */}
+          <div className="lg:col-span-4 space-y-4">
             
-            {/* Shop Details Card */}
-            {shop && (
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-premium space-y-4">
-                <span className="text-[10px] font-mono uppercase font-bold text-slate-400 block">
-                  Printing Shop Vendor
+            {/* Express Token Pass */}
+            <div className="rounded-3xl p-6 sm:p-7 bg-[#0D1017] text-white border border-white/10 shadow-2xl space-y-5">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <span className="font-mono text-[10px] text-[#FF5A1F] uppercase font-bold tracking-widest">
+                  30-SECOND PICKUP PASS
                 </span>
-
-                <div className="space-y-1">
-                  <h3 className="font-display font-extrabold text-base text-slate-900">{shop.shop_name}</h3>
-                  <p className="text-xs text-slate-500">{shop.address}</p>
-                </div>
-
-                <div className="space-y-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                    <span>{shop.distance} from your dorm</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                    <span>{shop.opening_hours}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                    <a href={`tel:${shop.phone}`} className="font-mono text-brand-700 hover:underline">
-                      {shop.phone}
-                    </a>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => onViewShop(shop.id)}
-                  className="w-full py-2.5 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <span>View Full Shop Profile</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               </div>
-            )}
 
-            {/* Specifications Card */}
-            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-premium space-y-4">
-              <span className="text-[10px] font-mono uppercase font-bold text-slate-400 block">
-                Job Specifications
-              </span>
+              {/* Huge Alphanumeric Token */}
+              <div className="text-center py-4 bg-white/5 rounded-2xl border border-white/10">
+                <span className="font-mono text-[11px] text-[#8B9098] uppercase block">Counter Verification Code</span>
+                <div className="font-mono font-bold text-4xl sm:text-5xl text-white tracking-wider mt-1 text-[#FF5A1F]">
+                  {activeOrder.order_number}
+                </div>
+                <span className="font-mono text-[10px] text-slate-400 mt-2 block">
+                  Show this pass at counter for instant grab & go
+                </span>
+              </div>
 
-              <div className="space-y-2.5 text-xs text-slate-700">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Color Mode:</span>
-                  <span className="font-bold">{activeOrder.color_mode === 'bw' ? 'Black & White Laser' : 'Vibrant Color'}</span>
+              {/* Shop Destination */}
+              <div className="space-y-2 text-xs font-sans">
+                <div className="flex justify-between text-[#8B9098]">
+                  <span>Pickup Location</span>
+                  <span className="text-white font-medium truncate max-w-[170px]">{activeOrder.shop_name}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Sides:</span>
-                  <span className="font-bold capitalize">{activeOrder.sides}-Sided</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Paper & Size:</span>
-                  <span className="font-mono">{activeOrder.paper_size} ({activeOrder.orientation})</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Binding:</span>
-                  <span className="font-bold capitalize">{activeOrder.binding_type}</span>
-                </div>
-                {activeOrder.lamination && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Finishing:</span>
-                    <span className="font-bold text-brand-700">Thermal Lamination</span>
-                  </div>
+                {shop && (
+                  <>
+                    <div className="flex justify-between text-[#8B9098]">
+                      <span>Address</span>
+                      <span className="text-white font-medium truncate max-w-[170px]">{shop.address}</span>
+                    </div>
+                    <div className="flex justify-between text-[#8B9098]">
+                      <span>Contact</span>
+                      <span className="text-[#FF5A1F] font-mono">{shop.phone}</span>
+                    </div>
+                  </>
                 )}
-                {activeOrder.special_instructions && (
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-slate-500 text-[11px] block">Instructions:</span>
-                    <p className="text-slate-800 text-[11px] italic mt-0.5">"{activeOrder.special_instructions}"</p>
-                  </div>
-                )}
+                <div className="flex justify-between text-[#8B9098] pt-2 border-t border-white/10">
+                  <span>Total Amount</span>
+                  <span className="font-sans font-light text-xl text-white">₹{activeOrder.total_price.toFixed(2)}</span>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-baseline justify-between">
-                <span className="text-xs text-slate-500 font-medium">Total Cost:</span>
-                <span className="font-display font-black text-xl text-brand-700">₹{activeOrder.total_price.toFixed(2)}</span>
-              </div>
+              {/* View Receipt Button */}
+              <button
+                onClick={() => setReceiptOrder(activeOrder)}
+                className="w-full h-10 px-4 rounded-full bg-white text-[#0F1115] hover:bg-[#EEF0F2] font-sans font-medium text-xs transition-colors flex items-center justify-center gap-2"
+              >
+                <span>View Itemized Tax Invoice</span>
+                <ExternalLink className="w-3.5 h-3.5 text-[#FF5A1F]" />
+              </button>
             </div>
 
           </div>
@@ -421,11 +355,13 @@ export const OrderTracker: React.FC<OrderTrackerProps> = ({
 
       </div>
 
-      {/* Printable Receipt Modal */}
+      {/* Itemized Receipt Modal */}
       {receiptOrder && (
-        <ReceiptModal order={receiptOrder} onClose={() => setReceiptOrder(null)} />
+        <ReceiptModal
+          order={receiptOrder}
+          onClose={() => setReceiptOrder(null)}
+        />
       )}
     </div>
   );
 };
-

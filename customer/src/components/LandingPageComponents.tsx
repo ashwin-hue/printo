@@ -3,20 +3,14 @@ import {
   Upload, 
   MapPin, 
   Printer, 
-  CheckCircle2, 
+  Check, 
   Clock, 
   ShieldCheck, 
-  CreditCard, 
-  Layers, 
   ChevronDown, 
-  Sparkles,
-  Users,
-  Store,
+  ArrowRight,
   FileText,
   Zap,
-  TrendingUp,
-  Sliders,
-  DollarSign
+  Sparkles
 } from 'lucide-react';
 
 interface HowItWorksProps {
@@ -26,89 +20,87 @@ interface HowItWorksProps {
 export const HowItWorksSection: React.FC<HowItWorksProps> = ({ onStartOrder }) => {
   const steps = [
     {
-      num: '01',
-      title: 'Select a Printing Shop',
-      desc: 'Browse verified printing hubs near your campus or office. Compare live queues, prices, and available equipment.',
-      icon: MapPin,
-      tag: '0.2 km nearby'
+      num: 'NODE 01',
+      title: 'Target Nearby Campus Hub',
+      desc: 'Discover verified print centers within 0.2 to 1.2 km of your lecture hall. View live queue lengths and turnaround times before dispatching.',
+      tag: 'GEO-DISCOVERY'
     },
     {
-      num: '02',
-      title: 'Upload Document & Configure',
-      desc: 'Drop your PDF. Set copies, B&W or color, single or double-sided, spiral binding, and custom page ranges with instant auto-pricing.',
-      icon: Upload,
-      tag: 'PDF.js Parser'
+      num: 'NODE 02',
+      title: 'Upload Payload & Inspect',
+      desc: 'Drop your PDF document. Our client-side PDF.js rasterizer counts pages instantly, prevents corrupted files, and calculates upfront cost.',
+      tag: 'PDF.JS RASTERIZER'
     },
     {
-      num: '03',
-      title: 'Shop Owner Laser-Prints',
-      desc: 'The printing shop previews the PDF directly in-browser and initiates native laser printing without handling your USB drive.',
-      icon: Printer,
-      tag: 'High-DPI Laser'
+      num: 'NODE 03',
+      title: 'Edge Laser Calibration',
+      desc: 'The print shop receives your calibrated specs (B&W/Color, Duplex, Spiral Coil) and dispatches straight to high-speed commercial laser presses.',
+      tag: '1200 DPI CMYK'
     },
     {
-      num: '04',
-      title: 'Grab & Go with Zero Queue',
-      desc: 'Get a notification the instant your job is finished. Flash your pickup token at the express desk and walk out in under 30 seconds.',
-      icon: CheckCircle2,
-      tag: 'Zero Wait'
+      num: 'NODE 04',
+      title: '30-Second Token Grab & Go',
+      desc: 'Receive an instant notification when your job is hot off the press. Flash your pickup token pass (e.g. PRN-8842) at the express counter and walk out.',
+      tag: 'ZERO WAITING'
     }
   ];
 
   return (
-    <section className="py-20 lg:py-28 bg-[#F8FAFC]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-20 lg:py-28 bg-[#EEF0F2] text-[#0F1115] border-t border-[#C4C9CF]/60">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw]">
         
-        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-          <span className="text-xs font-mono font-bold uppercase tracking-widest text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200/60">
-            Frictionless Flow
-          </span>
-          <h2 className="font-display font-black text-3xl sm:text-5xl text-slate-900 tracking-tight">
-            How Printo Works
+        {/* Section Header */}
+        <div className="max-w-2xl mb-14 space-y-3">
+          <div className="font-mono font-medium text-[11.5px] tracking-[0.06em] uppercase text-[#2A2E35] flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
+            SEQUENTIAL CALIBRATION NODES
+          </div>
+          <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.025em] text-[#0F1115]">
+            How Printo works.<br />
+            <em className="italic text-[#0F1115]/90">From device to finished printout in 4 steps.</em>
           </h2>
-          <p className="text-slate-600 text-base sm:text-lg">
-            A seamless bridge between digital document dispatch and physical print output.
-          </p>
         </div>
 
+        {/* 4 Nodes Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {steps.map((step, idx) => {
-            const Icon = step.icon;
-            return (
-              <div 
-                key={idx}
-                className="relative bg-white rounded-3xl p-7 border border-slate-200/80 shadow-premium hover:shadow-premium-hover transition-all duration-300 flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="font-display font-black text-3xl text-slate-200 group-hover:text-brand-300 transition-colors">
-                      {step.num}
-                    </span>
-                    <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-700 flex items-center justify-center group-hover:bg-brand-600 group-hover:text-white transition-all duration-300">
-                      <Icon className="w-6 h-6" />
-                    </div>
-                  </div>
-
-                  <span className="inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-600 mb-3">
-                    {step.tag}
-                  </span>
-
-                  <h3 className="font-display font-bold text-lg text-slate-900 mb-2">
-                    {step.title}
-                  </h3>
-
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {step.desc}
-                  </p>
+          {steps.map((s, idx) => (
+            <div
+              key={s.num}
+              className="p-6 rounded-2xl bg-white border border-[#C4C9CF] shadow-sm flex flex-col justify-between hover:-translate-y-1 transition-all duration-300"
+            >
+              <div>
+                <div className="flex items-center justify-between border-b border-[#EEF0F2] pb-3 mb-4">
+                  <span className="font-mono text-xs font-bold text-[#FF5A1F]">{s.num}</span>
+                  <span className="font-mono text-[10px] text-[#8B9098] uppercase tracking-wider">{s.tag}</span>
                 </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-brand-700">
-                  <span>Step {idx + 1} of 4</span>
-                </div>
+                <h3 className="font-serif font-normal text-xl text-[#0F1115] leading-snug">
+                  {s.title}
+                </h3>
+                <p className="font-sans text-xs text-[#2A2E35] mt-2.5 leading-relaxed">
+                  {s.desc}
+                </p>
               </div>
-            );
-          })}
+
+              <div className="pt-6 mt-4 border-t border-[#EEF0F2] font-mono text-[11px] text-[#7A7F88] flex items-center justify-between">
+                <span>STAGE 0{idx + 1}</span>
+                <span className="text-[#0F1115] font-semibold">&rarr;</span>
+              </div>
+            </div>
+          ))}
         </div>
+
+        {/* CTA Bar */}
+        {onStartOrder && (
+          <div className="mt-12 text-center">
+            <button
+              onClick={onStartOrder}
+              className="h-10 px-6 rounded-full bg-[#FF5A1F] hover:bg-[#E84E16] text-white font-sans font-medium text-xs shadow-sm hover:-translate-y-0.5 transition-all inline-flex items-center gap-2"
+            >
+              <span>Begin Your First Calibration Order</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
       </div>
     </section>
@@ -118,73 +110,66 @@ export const HowItWorksSection: React.FC<HowItWorksProps> = ({ onStartOrder }) =
 export const FeaturesSection: React.FC = () => {
   const features = [
     {
-      icon: Clock,
-      title: 'Real-Time Queue Telemetry',
-      desc: 'See the current backlog at every printing shop before ordering. Avoid peak submission rush hours effortlessly.'
-    },
-    {
-      icon: FileText,
       title: 'In-Browser PDF.js Inspection',
-      desc: 'High-fidelity document rendering with multi-page navigation, zoom, and orientation checking for shop operators.'
+      desc: 'Direct parsing in browser memory. Verifies exact page counts, protects against corrupted PDFs, and eliminates public computer USB malware.',
+      tag: 'SECURITY'
     },
     {
-      icon: Sliders,
-      title: 'Granular Print Finishing',
-      desc: 'Full control over spiral wire binding, corner stapling, thermal lamination, page ranges, and paper dimensions.'
+      title: 'Automatic Duplex Paper Discount',
+      desc: 'Double-sided printing reduces physical paper consumption by 50% and automatically deducts ₹0.25 to ₹0.50 per sheet off your total order.',
+      tag: 'ECO & SAVINGS'
     },
     {
-      icon: ShieldCheck,
-      title: 'Private & Secure Document Pipe',
-      desc: 'No shared USBs. Documents are encrypted, authenticated, and access-restricted strictly to your selected printing shop.'
+      title: 'Academic Binding Specification',
+      desc: 'Spiral wire, corner staple, hardcover thesis binding with gold-foil spine calibration, and thermal glossy lamination.',
+      tag: 'FINISHING'
     },
     {
-      icon: CreditCard,
-      title: 'Automated Pricing Calculator',
-      desc: 'Dynamic calculations accounting for volume tiers, double-sided discounts, and finishing accessories in real time.'
-    },
-    {
-      icon: Zap,
-      title: '1-Click Native Print Engine',
-      desc: 'Shop owners trigger browser-native laser prints formatted with proper page breaks and orientation metadata.'
+      title: '30-Second Token Grab-and-Go',
+      desc: 'Each completed order generates a high-contrast alphanumeric pickup token. Operators pull your ready package the moment you arrive.',
+      tag: 'EXPRESS PASS'
     }
   ];
 
   return (
-    <section className="py-20 lg:py-28 bg-white border-t border-slate-200/80">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-20 lg:py-28 bg-[#EEF0F2] text-[#0F1115] border-t border-[#C4C9CF]/60">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw]">
         
-        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-          <span className="text-xs font-mono font-bold uppercase tracking-widest text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200/60">
-            Enterprise Architecture
-          </span>
-          <h2 className="font-display font-black text-3xl sm:text-5xl text-slate-900 tracking-tight">
-            Engineered for high-volume academic and commercial printing.
+        <div className="max-w-2xl mb-14 space-y-3">
+          <div className="font-mono font-medium text-[11.5px] tracking-[0.06em] uppercase text-[#2A2E35] flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
+            PRECISION FEATURES
+          </div>
+          <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.025em] text-[#0F1115]">
+            Engineered for university workloads.<br />
+            <em className="italic text-[#0F1115]/90">Built for speed, accuracy, and clarity.</em>
           </h2>
-          <p className="text-slate-600 text-base sm:text-lg">
-            Everything students, researchers, and professional print businesses need for a flawless workflow.
-          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feat, idx) => {
-            const Icon = feat.icon;
-            return (
-              <div 
-                key={idx}
-                className="p-7 rounded-3xl bg-slate-50/70 border border-slate-200/70 hover:bg-white hover:shadow-premium transition-all duration-300 space-y-4"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-700">
-                  <Icon className="w-6 h-6" />
-                </div>
-                <h3 className="font-display font-bold text-lg text-slate-900">
-                  {feat.title}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {features.map((f) => (
+            <div
+              key={f.title}
+              className="p-8 rounded-2xl bg-white border border-[#C4C9CF] shadow-sm flex flex-col justify-between"
+            >
+              <div>
+                <span className="font-mono text-[10px] font-bold text-[#FF5A1F] uppercase tracking-wider bg-[#FFE1D3] px-2.5 py-1 rounded-full">
+                  {f.tag}
+                </span>
+                <h3 className="font-serif font-normal text-2xl text-[#0F1115] mt-4">
+                  {f.title}
                 </h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {feat.desc}
+                <p className="font-sans text-xs sm:text-sm text-[#2A2E35] mt-2.5 leading-relaxed">
+                  {f.desc}
                 </p>
               </div>
-            );
-          })}
+
+              <div className="pt-6 mt-4 border-t border-[#EEF0F2] flex items-center justify-between font-mono text-[11px] text-[#7A7F88]">
+                <span>PRINTO PRECISION ENGINE</span>
+                <span className="text-[#0F1115]">VERIFIED</span>
+              </div>
+            </div>
+          ))}
         </div>
 
       </div>
@@ -194,73 +179,41 @@ export const FeaturesSection: React.FC = () => {
 
 export const BenefitsSection: React.FC = () => {
   return (
-    <section className="py-20 lg:py-28 bg-[#F8FAFC]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-20 lg:py-28 bg-[#0D1017] text-white border-t border-white/10 relative overflow-hidden">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw] relative z-10">
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          
-          {/* Benefits for Customers / Students */}
-          <div className="bg-white rounded-3xl p-8 sm:p-10 border border-slate-200/80 shadow-premium space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-700 font-mono text-xs font-bold uppercase tracking-wider">
-              <Users className="w-4 h-4" />
-              For Students & Customers
-            </div>
-
-            <h3 className="font-display font-extrabold text-2xl sm:text-3xl text-slate-900">
-              Never miss a submission deadline due to shop queues.
-            </h3>
-
-            <div className="space-y-4 text-xs sm:text-sm text-slate-600">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p><strong className="text-slate-900">Send files from your hostel or office:</strong> Upload assignments directly after finishing, whether it's 2 AM or 10 minutes before class.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p><strong className="text-slate-900">Guaranteed print formatting:</strong> What you configure (spiral binding, double-sided, color pages) is exactly what the machine prints.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p><strong className="text-slate-900">Live order tracking with pickup PIN:</strong> You know when your order changes from Pending to Printing to Ready.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p><strong className="text-slate-900">Complete historical records:</strong> Re-order past documents or download official GST receipts anytime.</p>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+          <div className="lg:col-span-6 space-y-4">
+            <span className="font-mono text-xs font-bold text-[#FF5A1F] uppercase tracking-wider">
+              TELEMETRY & IMPACT
+            </span>
+            <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-tight text-white">
+              Zero lost minutes.<br />
+              <em className="italic opacity-90">100% verified print delivery.</em>
+            </h2>
+            <p className="font-sans text-sm text-[#8B9098] leading-relaxed">
+              University students previously spent an average of 42 minutes standing in lines outside campus printing shops during exam submission weeks. Printo compresses this down to 30 seconds.
+            </p>
           </div>
 
-          {/* Benefits for Printing Shops */}
-          <div className="bg-slate-900 text-white rounded-3xl p-8 sm:p-10 border border-slate-800 shadow-card-dark space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 text-brand-300 font-mono text-xs font-bold uppercase tracking-wider">
-              <Store className="w-4 h-4" />
-              For Printing Shop Owners
+          <div className="lg:col-span-6 grid grid-cols-2 gap-4">
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+              <div className="font-sans font-light text-4xl sm:text-5xl text-white tracking-tight">−94%</div>
+              <div className="font-mono text-[11px] text-[#FF5A1F] mt-1.5 uppercase">Queue Time Saved</div>
             </div>
-
-            <h3 className="font-display font-extrabold text-2xl sm:text-3xl text-white">
-              Double your daily throughput without adding staff.
-            </h3>
-
-            <div className="space-y-4 text-xs sm:text-sm text-slate-300">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong className="text-white">Zero counter bottlenecks:</strong> No more 20 customers huddling over your PC trying to open WhatsApp attachments or email accounts.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong className="text-white">1-Click Browser Printing:</strong> Click Print to send high-resolution jobs straight to your local laser printers through browser native print.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong className="text-white">Pre-calculated pricing:</strong> Customers pay upfront according to your configured rates for B/W, Color, A3, and spiral binding.</p>
-              </div>
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                <p><strong className="text-white">Live daily analytics:</strong> Monitor daily revenue, active queue backlog, and turnaround metrics from your personal dashboard.</p>
-              </div>
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+              <div className="font-sans font-light text-4xl sm:text-5xl text-white tracking-tight">12s</div>
+              <div className="font-mono text-[11px] text-[#FF5A1F] mt-1.5 uppercase">Counter Collection</div>
+            </div>
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+              <div className="font-sans font-light text-4xl sm:text-5xl text-white tracking-tight">0</div>
+              <div className="font-mono text-[11px] text-[#FF5A1F] mt-1.5 uppercase">Corrupted Thumb Drives</div>
+            </div>
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10">
+              <div className="font-sans font-light text-4xl sm:text-5xl text-white tracking-tight">4</div>
+              <div className="font-mono text-[11px] text-[#FF5A1F] mt-1.5 uppercase">Campus Hubs Mapped</div>
             </div>
           </div>
-
         </div>
 
       </div>
@@ -273,63 +226,60 @@ export const FAQSection: React.FC = () => {
 
   const faqs = [
     {
-      q: 'How do I know my document will be printed correctly without errors?',
-      a: 'Printo parses your PDF in your browser using PDF.js to verify page counts, dimension ratios, and readability. When the shop owner opens your order, they see an identical browser preview alongside your explicit instructions for double-sided orientation, spiral binding, and paper size.'
+      q: 'How does remote laser dispatch work without a physical USB drive?',
+      a: 'When you upload your PDF on Printo, our client-side PDF.js rasterizer reads your file, extracts page counts, and formats the job payload directly for the shop laser console. The shop prints the file without ever inserting a thumb drive into a shared PC.'
     },
     {
-      q: 'Are my private documents and academic papers kept confidential?',
-      a: 'Yes. Customer documents are isolated and accessible only by you and the specific printing shop fulfilling your job. Shops access files via authenticated sessions, and document retention policies ensure completed files can be purged.'
+      q: 'How do I pick up my documents once they are printed?',
+      a: 'When your order status turns to "Ready for Pickup", you receive an express token code (e.g. PRN-8842). Walk to the express counter, quote or show your code, and receive your printed, bound document in under 30 seconds.'
+    },
+    {
+      q: 'What happens if I need custom page ranges, like pages 1-12 and 24-30?',
+      a: 'In the Order Wizard, simply select "Custom Page Range" and enter your exact page selection (e.g. "1-12, 24-30"). Our calculator automatically updates the page count and cost breakdown.'
     },
     {
       q: 'Can I cancel an order if I uploaded the wrong PDF file?',
-      a: 'Yes! You can cancel your order immediately as long as its status is "Pending". Once the printing shop accepts and begins the laser printing process, cancellation is locked to avoid wasted paper and ink.'
-    },
-    {
-      q: 'How does browser-based printing work for the shop owner?',
-      a: 'Shop owners do not need to install complex local printer daemons. When an order is opened in the Shop Dashboard, our engine renders the document and uses the browser\'s native print functionality (Ctrl+P / window.print) to route the job directly to the shop\'s connected laser or plot printer.'
-    },
-    {
-      q: 'What finishing options are supported?',
-      a: 'You can choose between No Binding, Corner Stapling (top-left or multi-point), Spiral Wire-O Binding with transparent front/black cardstock back, Hardcover Thesis Binding, and thermal lamination.'
+      a: 'Yes! While your order is in the "Submitted" or "Pending" queue, you can cancel it with one click from the Order Tracker. Once the laser shop accepts and starts printing, jobs cannot be cancelled.'
     }
   ];
 
   return (
-    <section className="py-20 lg:py-28 bg-white border-t border-slate-200/80">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-20 lg:py-28 bg-[#EEF0F2] text-[#0F1115] border-t border-[#C4C9CF]/60">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw]">
         
-        <div className="text-center mb-16 space-y-4">
-          <span className="text-xs font-mono font-bold uppercase tracking-widest text-brand-700 bg-brand-50 px-3 py-1 rounded-full border border-brand-200/60">
-            Got Questions?
-          </span>
-          <h2 className="font-display font-black text-3xl sm:text-5xl text-slate-900 tracking-tight">
-            Frequently Asked Questions
+        <div className="max-w-2xl mb-12 space-y-3">
+          <div className="font-mono font-medium text-[11.5px] tracking-[0.06em] uppercase text-[#2A2E35] flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
+            COMMONLY ASKED QUESTIONS
+          </div>
+          <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.025em] text-[#0F1115]">
+            Frequently asked questions.<br />
+            <em className="italic text-[#0F1115]/90">Everything you need to know about Printo.</em>
           </h2>
-          <p className="text-slate-600 text-base">
-            Everything you need to know about the Printo zero-wait printing experience.
-          </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="max-w-3xl space-y-3">
           {faqs.map((faq, idx) => {
             const isOpen = openIdx === idx;
             return (
-              <div 
-                key={idx}
-                className="rounded-2xl border border-slate-200/80 overflow-hidden transition-all duration-200"
+              <div
+                key={faq.q}
+                className="rounded-2xl bg-white border border-[#C4C9CF] overflow-hidden transition-all"
               >
                 <button
+                  type="button"
                   onClick={() => setOpenIdx(isOpen ? null : idx)}
-                  className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 bg-white hover:bg-slate-50 transition-colors"
+                  className="w-full p-5 text-left flex items-center justify-between gap-4 font-serif text-lg sm:text-xl text-[#0F1115]"
                 >
-                  <span className="font-display font-bold text-base sm:text-lg text-slate-900">
-                    {faq.q}
-                  </span>
-                  <ChevronDown className={`w-5 h-5 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-brand-700' : ''}`} />
+                  <span>{faq.q}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-[#FF5A1F] transition-transform duration-200 shrink-0 ${
+                      isOpen ? 'rotate-180' : ''
+                    }`}
+                  />
                 </button>
-
                 {isOpen && (
-                  <div className="p-5 sm:p-6 pt-0 text-xs sm:text-sm text-slate-600 leading-relaxed bg-white border-t border-slate-100">
+                  <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-[#2A2E35] font-sans leading-relaxed border-t border-[#EEF0F2]">
                     {faq.a}
                   </div>
                 )}
@@ -342,4 +292,3 @@ export const FAQSection: React.FC = () => {
     </section>
   );
 };
-

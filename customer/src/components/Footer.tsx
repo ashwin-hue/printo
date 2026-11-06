@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, Heart, Mail, Phone, MapPin, ShieldCheck, Zap } from 'lucide-react';
+import { ExternalLink, ArrowUpRight } from 'lucide-react';
 
 interface FooterProps {
   onNavigate?: (tab: string) => void;
@@ -7,45 +7,45 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   return (
-    <footer className="bg-slate-950 text-white border-t border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20">
+    <footer className="bg-[#0D1017] text-white border-t border-white/10">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-8 lg:px-[8.9vw] py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10">
           
           {/* Brand Info */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-brand-600 flex items-center justify-center text-white shadow-lg">
-                <Printer className="w-5 h-5" />
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[#FF5A1F] flex items-center justify-center text-white font-mono text-xs font-bold">
+                ⚡
               </div>
-              <span className="font-display font-black text-2xl text-white tracking-tight">
+              <span className="font-sans font-semibold text-2xl tracking-[-0.035em] text-white">
                 Printo
               </span>
             </div>
             
-            <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-              The premier SaaS platform connecting university campuses and professionals with verified local printing shops. Eliminate lines, upload remotely, and collect with zero wait.
+            <p className="font-sans text-xs text-[#8B9098] max-w-sm leading-relaxed">
+              University cloud printing protocol connecting students and faculty with verified campus laser presses. Zero queues, zero USB drives, 30-second grab-and-go.
             </p>
 
-            <div className="flex items-center gap-2 pt-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono bg-emerald-950 border border-emerald-800 text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                ALL CAMPUS PRINT HUBS ONLINE
+            <div className="pt-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-mono bg-white/5 border border-white/10 text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                CAMPUS LASER STATIONS ACTIVE
               </span>
             </div>
           </div>
 
           {/* Quick Links */}
           <div className="space-y-3">
-            <p className="font-mono text-xs font-bold uppercase tracking-wider text-slate-400">Platform</p>
-            <ul className="space-y-2 text-xs text-slate-400">
+            <p className="font-mono text-xs uppercase tracking-wider text-[#8B9098]">Protocol</p>
+            <ul className="space-y-2 font-sans text-xs text-slate-300">
               <li>
                 <button onClick={() => onNavigate?.('shops')} className="hover:text-white transition-colors">
-                  Find Print Shops
+                  Find Campus Shops
                 </button>
               </li>
               <li>
                 <button onClick={() => onNavigate?.('order_wizard')} className="hover:text-white transition-colors">
-                  Upload PDF & Configure
+                  Upload PDF Payload
                 </button>
               </li>
               <li>
@@ -54,62 +54,46 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate?.('shop_dashboard')} className="hover:text-white transition-colors">
-                  Shop Owner Portal
-                </button>
+                <a href="http://localhost:5174" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1 text-[#FF5A1F]">
+                  Shop Owner Console <ArrowUpRight className="w-3 h-3" />
+                </a>
               </li>
             </ul>
           </div>
 
-          {/* For Businesses */}
+          {/* Finishing Services */}
           <div className="space-y-3">
-            <p className="font-mono text-xs font-bold uppercase tracking-wider text-slate-400">Printing Shops</p>
-            <ul className="space-y-2 text-xs text-slate-400">
-              <li>
-                <button onClick={() => onNavigate?.('shop_dashboard')} className="hover:text-white transition-colors">
-                  Owner Dashboard
-                </button>
-              </li>
-              <li>
-                <span className="text-slate-400">Pricing Configuration</span>
-              </li>
-              <li>
-                <span className="text-slate-400">PDF.js Native Print Engine</span>
-              </li>
-              <li>
-                <span className="text-slate-400">Queue Management</span>
-              </li>
+            <p className="font-mono text-xs uppercase tracking-wider text-[#8B9098]">Finishing</p>
+            <ul className="space-y-2 font-sans text-xs text-slate-300">
+              <li>B&W 1200 DPI Laser (₹1.50)</li>
+              <li>Vibrant Color CMYK (₹8.00)</li>
+              <li>Spiral Wire Binding (₹35)</li>
+              <li>Thesis Gold-Foil Hardcover</li>
+              <li>Thermal Glossy Lamination</li>
             </ul>
           </div>
 
-          {/* Support & Contact */}
+          {/* Support & SLA */}
           <div className="space-y-3">
-            <p className="font-mono text-xs font-bold uppercase tracking-wider text-slate-400">Help & Support</p>
-            <div className="space-y-2 text-xs text-slate-400">
-              <div className="flex items-center gap-2">
-                <Mail className="w-3.5 h-3.5 text-brand-400" />
-                <span>support@printo.network</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-brand-400" />
-                <span>+91 (080) 4920-8800</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-3.5 h-3.5 text-brand-400" />
-                <span>Campus Tech Park, Gate 3</span>
-              </div>
-            </div>
+            <p className="font-mono text-xs uppercase tracking-wider text-[#8B9098]">SLA & Support</p>
+            <ul className="space-y-2 font-sans text-xs text-slate-300">
+              <li>30-Sec Counter Pickup SLA</li>
+              <li>Itemized GST Print Invoices</li>
+              <li>Encrypted PDF In-Browser Memory</li>
+              <li>Campus Operator Helpline</li>
+            </ul>
           </div>
 
         </div>
 
-        {/* Bottom copyright */}
-        <div className="mt-12 pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} Printo Cloud Platform Inc. All rights reserved.</p>
-          <div className="flex items-center gap-6">
-            <span className="hover:text-slate-400 cursor-pointer">Privacy Policy</span>
-            <span className="hover:text-slate-400 cursor-pointer">Terms of Service</span>
-            <span className="hover:text-slate-400 cursor-pointer">Security Audits</span>
+        <div className="mt-12 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] text-[#7A7F88]">
+          <div>&copy; {new Date().getFullYear()} Printo Technologies. Designed for people. Calibrated for lasers.</div>
+          <div className="flex items-center gap-4">
+            <span className="hover:text-white cursor-pointer">Privacy</span>
+            <span>·</span>
+            <span className="hover:text-white cursor-pointer">Academic Terms</span>
+            <span>·</span>
+            <span className="text-[#FF5A1F]">v2.0 Distill Engine</span>
           </div>
         </div>
 
@@ -117,4 +101,3 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
     </footer>
   );
 };
-

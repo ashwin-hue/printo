@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, User, Store, Mail, Lock, Phone, ArrowRight, Check } from 'lucide-react';
-import { SAMPLE_USERS, setCurrentUser, getCurrentUser } from '../services/storage';
+import { X, User, Mail, Lock, Phone, ArrowRight, Check } from 'lucide-react';
+import { SAMPLE_USERS, setCurrentUser } from '../services/storage';
 import { UserRole } from '../types';
 
 interface AuthModalProps {
@@ -28,11 +28,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     e.preventDefault();
     const newUser = {
       id: `user-${Date.now()}`,
-      name: name || (role === 'customer' ? 'New Student' : 'New Shop Owner'),
-      email: email || 'user@example.com',
-      phone: phone || '+91 99999 88888',
+      name: name || (role === 'customer' ? 'Campus Student' : 'Shop Owner'),
+      email: email || 'student@campus.edu',
+      phone: phone || '+91 98765 43210',
       role,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
       created_at: new Date().toISOString(),
     };
     setCurrentUser(newUser);
@@ -41,140 +41,105 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200/80 space-y-6 relative">
+    <div className="fixed inset-0 z-50 bg-[#0F1115]/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+      <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-[#C4C9CF] space-y-6 relative">
         
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="flex items-center justify-between pb-3 border-b border-[#EEF0F2]">
           <div>
-            <h2 className="font-display font-black text-2xl text-slate-900">
-              {mode === 'login' ? 'Welcome Back' : 'Create an Account'}
+            <h2 className="font-serif font-normal text-2xl text-[#0F1115]">
+              {mode === 'login' ? 'Student Sign In' : 'Create Account'}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Access online document dispatch & order tracking
+            <p className="font-sans text-xs text-[#7A7F88] mt-0.5">
+              Access laser dispatch and order tracking
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            className="p-1 rounded-full text-[#8B9098] hover:text-[#0F1115] hover:bg-[#EEF0F2] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* 1-Click Instant Demo Login (Loved by reviewers) */}
-        <div className="p-4 rounded-2xl bg-brand-50/70 border border-brand-200/80 space-y-2.5">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-brand-800 block">
-            ⚡ Fast 1-Click Demo Profiles:
+        {/* 1-Click Fast Demo Login */}
+        <div className="p-4 rounded-2xl bg-[#EEF0F2] border border-[#C4C9CF] space-y-2">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[#FF5A1F] font-bold block">
+            ⚡ Quick Demo Accounts:
           </span>
           <div className="grid grid-cols-2 gap-2">
             <button
+              type="button"
               onClick={() => handleFastDemoLogin(0)}
-              className="p-2.5 rounded-xl bg-white hover:bg-brand-100 border border-brand-200 text-left transition-all"
+              className="p-2.5 rounded-xl border border-[#C4C9CF] bg-white text-left hover:border-[#FF5A1F] transition-all"
             >
-              <span className="block text-xs font-bold text-slate-900">🎓 Student Persona</span>
-              <span className="block text-[10px] text-slate-500 truncate">Priya Sharma</span>
+              <div className="font-sans font-medium text-xs text-[#0F1115]">Priya Sharma</div>
+              <div className="font-mono text-[10px] text-[#7A7F88]">Student account</div>
             </button>
             <button
+              type="button"
               onClick={() => handleFastDemoLogin(1)}
-              className="p-2.5 rounded-xl bg-white hover:bg-brand-100 border border-brand-200 text-left transition-all"
+              className="p-2.5 rounded-xl border border-[#C4C9CF] bg-white text-left hover:border-[#FF5A1F] transition-all"
             >
-              <span className="block text-xs font-bold text-slate-900">🏪 Shop Owner</span>
-              <span className="block text-[10px] text-slate-500 truncate">Amit Patel (Metro)</span>
+              <div className="font-sans font-medium text-xs text-[#0F1115]">Amit Patel</div>
+              <div className="font-mono text-[10px] text-[#7A7F88]">Shop owner</div>
             </button>
           </div>
         </div>
 
-        {/* Role toggle */}
-        <div className="flex rounded-2xl bg-slate-100 p-1 border border-slate-200/80">
-          <button
-            type="button"
-            onClick={() => setRole('customer')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-              role === 'customer'
-                ? 'bg-white text-brand-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Student / Customer
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('shop_owner')}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-              role === 'shop_owner'
-                ? 'bg-white text-brand-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Printing Shop Owner
-          </button>
-        </div>
-
-        {/* Form */}
+        {/* Auth Form */}
         <form onSubmit={handleFormSubmit} className="space-y-4">
           {mode === 'register' && (
             <div>
-              <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-1">
-                Full Name
-              </label>
+              <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-1">Full Name</label>
               <input
                 type="text"
-                required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={role === 'customer' ? 'e.g. Rahul Verma' : 'e.g. Ramesh Kumar'}
-                className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 focus:ring-2 focus:ring-brand-500/20"
+                placeholder="Priya Sharma"
+                className="w-full h-10 px-3.5 rounded-full border border-[#C4C9CF] text-xs font-sans text-[#0F1115] focus:outline-none focus:border-[#FF5A1F]"
               />
             </div>
           )}
 
           <div>
-            <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-1">
-              Email Address
-            </label>
+            <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-1">Email</label>
             <input
               type="email"
-              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. name@university.edu"
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 focus:ring-2 focus:ring-brand-500/20"
+              placeholder="student@campus.edu"
+              className="w-full h-10 px-3.5 rounded-full border border-[#C4C9CF] text-xs font-sans text-[#0F1115] focus:outline-none focus:border-[#FF5A1F]"
             />
           </div>
 
           <div>
-            <label className="text-xs font-mono font-bold uppercase text-slate-500 block mb-1">
-              Phone Number
-            </label>
+            <label className="font-mono text-xs uppercase text-[#7A7F88] block mb-1">Phone Number</label>
             <input
               type="tel"
-              required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g. +91 98765 43210"
-              className="w-full p-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:ring-2 focus:ring-brand-500/20"
+              placeholder="+91 98765 43210"
+              className="w-full h-10 px-3.5 rounded-full border border-[#C4C9CF] text-xs font-sans text-[#0F1115] focus:outline-none focus:border-[#FF5A1F]"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full py-3.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-md shadow-brand-700/20"
+            className="w-full h-10 px-4 rounded-full bg-[#FF5A1F] hover:bg-[#E84E16] text-white font-sans font-medium text-xs shadow-sm transition-colors flex items-center justify-center gap-2 mt-4"
           >
-            <span>{mode === 'login' ? 'Sign In to Printo' : 'Create Account'}</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>{mode === 'login' ? 'Continue' : 'Create Account'}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 
-        <div className="text-center pt-2 border-t border-slate-100">
+        <div className="pt-2 text-center border-t border-[#EEF0F2]">
           <button
             type="button"
             onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-            className="text-xs text-brand-700 hover:underline font-semibold"
+            className="font-mono text-xs text-[#7A7F88] hover:text-[#0F1115]"
           >
-            {mode === 'login' 
-              ? "Don't have an account? Sign up" 
-              : "Already have an account? Sign in"}
+            {mode === 'login' ? "Don't have an account? Register" : "Already registered? Sign in"}
           </button>
         </div>
 
@@ -182,4 +147,3 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     </div>
   );
 };
-

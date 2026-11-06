@@ -4,116 +4,104 @@
 
 @layer base {
   :root {
-    --brand-primary: #4338CA;
-    --brand-dark: #0F172A;
+    --bg: #EEF0F2;
+    --ink: #0F1115;
+    --body: #2A2E35;
+    --muted: #8B9098;
+    --code: #7A7F88;
+    --comment: #B3B8BF;
     --hot: #FF5A1F;
     --hot-soft: #FFE1D3;
-    --bg-pale: #EEF0F2;
-    --sans: 'Inter', system-ui, sans-serif;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
     --serif: 'Newsreader', Georgia, serif;
-    --mono: 'IBM Plex Mono', monospace;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
-    color: #0F172A;
-    background-color: #F8FAFC;
+    font-family: var(--sans);
+    color: var(--body);
+    background-color: var(--bg);
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  .font-newsreader {
-    font-family: 'Newsreader', Georgia, serif;
+  h1, h2, h3, h4, .font-serif, .font-display, .font-newsreader {
+    font-family: var(--serif);
+    color: var(--ink);
   }
 
-  .font-inter {
-    font-family: 'Inter', system-ui, sans-serif;
+  .font-sans, .font-inter {
+    font-family: var(--sans);
   }
 
-  .font-plex {
-    font-family: 'IBM Plex Mono', monospace;
-  }
-
-  h1, h2, h3, h4, .font-display {
-    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
-    letter-spacing: -0.02em;
-  }
-
-  code, pre, .font-mono {
-    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+  code, pre, .font-mono, .font-plex {
+    font-family: var(--mono);
   }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: #F1F5F9;
+  background: #E2E5E9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 4px;
+  background: #B3B8BF;
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+  background: #8B9098;
 }
 
-/* Glassmorphism & subtle borders */
+/* Glass & Card Panels */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(196, 201, 207, 0.6);
 }
 
 .glass-panel-dark {
-  background: rgba(15, 23, 42, 0.92);
+  background: rgba(13, 16, 23, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* Subtle dot grid pattern */
-.bg-grid-subtle {
-  background-size: 32px 32px;
-  background-image: 
-    linear-gradient(to right, rgba(99, 102, 241, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
-}
-
 .bg-dot-subtle {
-  background-image: radial-gradient(rgba(67, 56, 202, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(15, 17, 21, 0.09) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-/* Gradient text utility */
-.text-gradient {
-  background: linear-gradient(135deg, #1E1B4B 0%, #4338CA 50%, #6366F1 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Button & Pill Utilities */
+.btn-hot {
+  background-color: #FF5A1F;
+  color: #FFFFFF;
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.btn-hot:hover {
+  background-color: #E84E16;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(255, 90, 31, 0.3);
 }
 
-.text-gradient-purple {
-  background: linear-gradient(135deg, #4338CA 0%, #7C3AED 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #C4C9CF;
+  color: #2A2E35;
+  transition: all 0.2s ease;
+}
+.btn-secondary:hover {
+  background: #FFFFFF;
+  color: #0F1115;
+  border-color: #8B9098;
 }
 
-/* Animated grain / noise overlay for Awwwards texture */
-.grain-overlay {
-  position: relative;
-}
-.grain-overlay::after {
-  content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  pointer-events: none;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-}
-
-/* Smooth print media styles */
+/* Print Styles */
 @media print {
   body {
     background: #FFF !important;
@@ -126,4 +114,3 @@
     display: block !important;
   }
 }
-
