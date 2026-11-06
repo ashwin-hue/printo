@@ -110,21 +110,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             </svg>
           </div>
 
-          {/* Right Controls: Outlined Pill Button + Bell + Profile */}
+          {/* Right Controls: Bell + Profile + Quick Action */}
           <div className="flex items-center gap-3 pt-3">
             
-            {/* Outlined "Shop Portal" Pill Button (matches "Join Us" from reference image) */}
-            <a
-              href="http://localhost:5174"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="h-8 px-5 rounded-full border border-black text-black font-sans font-medium text-xs bg-white/70 hover:bg-black hover:text-white transition-all flex items-center gap-1.5 shadow-sm"
-              title="Open Shop Owner Portal (runs on port 5174)"
-            >
-              <span>Shop Portal</span>
-              <ExternalLink className="w-3 h-3 opacity-60" />
-            </a>
-
             {/* Notification Bell */}
             <div className="relative">
               <button

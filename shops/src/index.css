@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --bg: #EEF0F2;
+    --bg: #EAE6DF;
     --ink: #0F1115;
     --body: #2A2E35;
     --muted: #8B9098;
@@ -20,7 +20,7 @@
   body {
     font-family: var(--sans);
     color: var(--body);
-    background-color: var(--bg);
+    background-color: #000000;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

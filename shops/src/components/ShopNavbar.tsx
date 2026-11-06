@@ -157,17 +157,6 @@ export const ShopNavbar: React.FC<ShopNavbarProps> = ({
             <span>{isAccepting ? 'LASER LIVE' : 'PAUSED'}</span>
           </button>
 
-          {/* Outlined "Student App" Pill Button (matches "Join Us" from reference image) */}
-          <a
-            href="http://localhost:5173"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="h-8 px-5 rounded-full border border-black text-black font-sans font-medium text-xs bg-white/70 hover:bg-black hover:text-white transition-all flex items-center gap-1.5 shadow-sm"
-          >
-            <span>Student App</span>
-            <ExternalLink className="w-3 h-3 opacity-60" />
-          </a>
-
           {/* Notification Bell */}
           <div className="relative">
             <button
