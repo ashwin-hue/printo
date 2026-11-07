@@ -1,22 +1,15 @@
 {
-  "name": "printo-workspace",
+  "name": "printo",
+  "version": "1.0.0",
   "private": true,
-  "version": "2.0.0",
-  "workspaces": [
-    "customer",
-    "shops"
-  ],
+  "type": "module",
   "scripts": {
-    "dev": "npm --prefix customer run dev",
-    "dev:customer": "npm --prefix customer run dev",
-    "dev:shops": "npm --prefix shops run dev",
-    "build": "npm --prefix customer run build && npm --prefix shops run build",
-    "build:customer": "npm --prefix customer run build",
-    "build:shops": "npm --prefix shops run build",
-    "preview:customer": "npm --prefix customer run preview",
-    "preview:shops": "npm --prefix shops run preview"
-  },
-  "devDependencies": {
-    "playwright": "^1.64.1"
+    "nhost:db:apply": "node scripts/apply-nhost-schema.mjs",
+    "nhost:db:seed": "node scripts/apply-nhost-schema.mjs --seed",
+    "customer:dev": "npm --prefix customer run dev",
+    "customer:build": "npm --prefix customer run build",
+    "shops:dev": "npm --prefix shops run dev",
+    "shops:build": "npm --prefix shops run build"
   }
 }
+

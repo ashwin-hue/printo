@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "nhost:db:apply": "node ../scripts/apply-nhost-schema.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.3",
+    "@nhost/nhost-js": "^4.9.0",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "gsap": "^3.12.7",
