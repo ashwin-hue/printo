@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #EAE6DF;
+    --ink: #0F1115;
+    --body: #2A2E35;
+    --muted: #8B9098;
+    --code: #7A7F88;
+    --comment: #B3B8BF;
+    --hot: #FF3B00;
+    --hot-cta: #D93200;
+    --hot-soft: #FFE1D3;
+    --surface-cream: #FAF9F6;
+    --surface-butter: #FDE09B;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --serif: 'Newsreader', Georgia, serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+
+  body {
+    font-family: var(--sans);
+    color: var(--body);
+    background-color: #000000;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, .font-serif, .font-display, .font-newsreader {
+    font-family: var(--serif);
+    color: var(--ink);
+  }
+
+  .font-sans, .font-inter {
+    font-family: var(--sans);
+  }
+
+  code, pre, .font-mono, .font-plex {
+    font-family: var(--mono);
+  }
+}
+
+/* Custom dark scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A2E35;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
+/* Hide scrollbar completely while preserving scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Glass & Card Panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(196, 201, 207, 0.6);
+}
+
+.glass-panel-dark {
+  background: rgba(13, 16, 23, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Subtle dot grid pattern */
+.bg-dot-subtle {
+  background-image: radial-gradient(rgba(15, 17, 21, 0.09) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Button & Pill Utilities */
+.btn-hot {
+  background-color: #FF5A1F;
+  color: #FFFFFF;
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.btn-hot:hover {
+  background-color: #E84E16;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(255, 90, 31, 0.3);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid #C4C9CF;
+  color: #2A2E35;
+  transition: all 0.2s ease;
+}
+.btn-secondary:hover {
+  background: #FFFFFF;
+  color: #0F1115;
+  border-color: #8B9098;
+}
+
+/* Utility animations for useful feedback */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-panel-in {
+  animation: panel-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-panel-in {
+    animation: none;
+  }
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background: #FFF !important;
+    color: #000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
