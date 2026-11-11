@@ -666,6 +666,7 @@ export async function fetchShopOrders(shopId: string): Promise<Order[]> {
       orders(where: { shop_id: { _eq: $shopId } }, order_by: { created_at: desc }) {
         id
         order_number
+        customer_id
         status
         total_pages
         total_copies

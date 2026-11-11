@@ -5,6 +5,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  KeyRound,
   Loader2,
   Lock,
   LogOut,
@@ -14,6 +15,7 @@ import {
   Plus,
   Power,
   Printer,
+  QrCode,
   RefreshCw,
   Settings,
   CheckCircle2,
@@ -21,8 +23,15 @@ import {
   Usb,
   X
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import type { Shop, Order, OrderStatus, BucketFile } from '../types/database';
 import type { DetectedPrinter } from '../services/localPrinters';
+import { getCustomerOtp } from '../utils/otp';
+import {
+  buildShopQrDeepLink,
+  getDefaultCustomerAppUrl,
+  getShopUniqueCode,
+} from '../utils/shopQr';
 import { OpenFreeMapPicker, type SelectedLocation } from './OpenFreeMapPicker';
 
 const AVAILABLE_SHOP_SERVICES = [
@@ -141,6 +150,107 @@ export function ShopBentoDashboard({
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+  const [counterIdQuery, setCounterIdQuery] = useState('');
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrBaseUrl, setQrBaseUrl] = useState<string>(() => getDefaultCustomerAppUrl());
+  const [shopQrDataUrl, setShopQrDataUrl] = useState<string>('');
+
+  const shopUniqueId = getShopUniqueCode(shop.id);
+  const qrDeepLink = buildShopQrDeepLink(shop.id, qrBaseUrl);
+
+  useEffect(() => {
+    let active = true;
+    QRCode.toDataURL(qrDeepLink, {
+      width: 420,
+      margin: 2,
+      color: { dark: '#0F1115', light: '#FFFFFF' },
+    })
+      .then((url) => {
+        if (active) setShopQrDataUrl(url);
+      })
+      .catch((err) => {
+        console.error('QR generation failed:', err);
+      });
+    return () => {
+      active = false;
+    };
+  }, [qrDeepLink]);
+
+  const handleSaveQrBaseUrl = (nextUrl: string) => {
+    setQrBaseUrl(nextUrl);
+    try {
+      if (typeof window !== 'undefined' && /^https?:\/\//i.test(nextUrl.trim())) {
+        window.localStorage.setItem('prinrox_customer_app_url', nextUrl.trim());
+      }
+    } catch {
+      // Ignore storage write issues
+    }
+  };
+
+  const handleDownloadShopQrPoster = async () => {
+    if (!shopQrDataUrl) return;
+    try {
+      const qrImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error('QR image load failed'));
+        el.src = shopQrDataUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 940;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Off-white rounded poster canvas with Bento header
+      ctx.fillStyle = '#0F1115';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = '#FAF9F6';
+      ctx.fillRect(28, 28, canvas.width - 56, canvas.height - 56);
+
+      ctx.fillStyle = '#D93200';
+      ctx.fillRect(28, 28, canvas.width - 56, 16);
+
+      ctx.fillStyle = '#0F1115';
+      ctx.font = 'bold 26px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('PRINROX  |  SCAN TO UPLOAD & PRINT', canvas.width / 2, 108);
+
+      ctx.font = 'bold 42px Georgia, serif';
+      ctx.fillText(shop.shop_name.slice(0, 28), canvas.width / 2, 174);
+
+      // Unique Shop ID dark pill
+      ctx.fillStyle = '#0F1115';
+      ctx.fillRect(190, 206, 340, 56);
+      ctx.fillStyle = '#FDE09B';
+      ctx.font = 'bold 28px monospace';
+      ctx.fillText(`SHOP ID: ${shopUniqueId}`, canvas.width / 2, 244);
+
+      // White framed QR square
+      ctx.strokeStyle = '#0F1115';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(140, 296, 440, 440);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(142, 298, 436, 436);
+      ctx.drawImage(qrImg, 160, 316, 400, 400);
+
+      ctx.fillStyle = '#262626';
+      ctx.font = '600 22px sans-serif';
+      ctx.fillText('Open your camera or Prinrox app to send files', canvas.width / 2, 800);
+      ctx.fillStyle = '#D93200';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText('directly to our counter printer queue', canvas.width / 2, 834);
+
+      const link = document.createElement('a');
+      link.download = `prinrox-qr-${shopUniqueId}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      setFeedbackToast(`Downloaded ${shopUniqueId} counter QR poster`);
+    } catch (err) {
+      console.error('Could not generate poster PNG:', err);
+    }
+  };
 
   useEffect(() => {
     if (!feedbackToast) return;
@@ -278,7 +388,12 @@ export function ShopBentoDashboard({
   ).length;
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
 
+  const normalizedCounterId = counterIdQuery.replace(/\D/g, '').slice(0, 4);
+
   const filteredOrders = orders.filter((o) => {
+    if (normalizedCounterId.length === 4) {
+      return getCustomerOtp(o.customer_id || o.customer?.id) === normalizedCounterId;
+    }
     if (jobFilter === 'ALL') return true;
     if (jobFilter === 'PENDING') return o.status === 'pending' || o.status === 'accepted';
     if (jobFilter === 'PRINTING') return o.status === 'printing';
@@ -470,6 +585,41 @@ export function ShopBentoDashboard({
               </div>
             </div>
 
+            {/* Unique Shop ID + Scannable Counter QR Card */}
+            <div className="rounded-[18px] bg-black text-white p-3.5 flex items-center justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                  Unique Shop ID
+                </div>
+                <div className="font-mono font-black text-sm tracking-wider text-[#FDE09B] tabular-nums">
+                  {shopUniqueId}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(true)}
+                  className="mt-1 px-2.5 py-1 rounded-full bg-[#D93200] hover:bg-white hover:text-[#0F1115] text-white text-[11px] font-sans font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <QrCode className="w-3 h-3" aria-hidden="true" />
+                  <span>Counter QR</span>
+                </button>
+              </div>
+              {shopQrDataUrl && (
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(true)}
+                  className="w-16 h-16 rounded-xl bg-white p-1 shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                  title="Expand scannable Shop QR"
+                  aria-label="Open counter QR code standee"
+                >
+                  <img
+                    src={shopQrDataUrl}
+                    alt={`${shop.shop_name} QR code`}
+                    className="w-full h-full object-contain"
+                  />
+                </button>
+              )}
+            </div>
+
             <div className="flex-1 flex flex-col justify-end space-y-2 pt-3 border-t border-black/10">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-sans font-semibold text-neutral-700 flex items-center gap-1.5">
@@ -549,13 +699,40 @@ export function ShopBentoDashboard({
             {/* TOP SECTION: CUSTOMER PRINT JOBS */}
             <div className="p-5 sm:p-6 space-y-4">
               
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#0F1115] text-balance">
-                  Live Print Queue
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-black text-[#FDE09B] text-xs font-sans font-bold tabular-nums">
-                  {filteredOrders.length} {filteredOrders.length === 1 ? 'job' : 'jobs'}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <h2 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#0F1115] text-balance">
+                    Live Print Queue
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-black text-[#FDE09B] text-xs font-sans font-bold tabular-nums">
+                    {filteredOrders.length} {filteredOrders.length === 1 ? 'job' : 'jobs'}
+                  </span>
+                </div>
+
+                {/* Quick Customer ID No Filter */}
+                <div className="flex items-center gap-1.5 bg-white border border-black/25 rounded-full px-3 h-9 shadow-xs">
+                  <KeyRound className="w-3.5 h-3.5 text-[#D93200] shrink-0" aria-hidden="true" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={counterIdQuery}
+                    onChange={(e) => setCounterIdQuery(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="Filter by ID No"
+                    className="w-32 bg-transparent text-xs font-mono font-bold tracking-wider text-[#0F1115] placeholder:font-sans placeholder:font-medium placeholder:tracking-normal placeholder:text-neutral-500 focus:outline-none"
+                    aria-label="Filter by customer 4-digit ID No"
+                  />
+                  {counterIdQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCounterIdQuery('')}
+                      className="text-neutral-500 hover:text-black cursor-pointer"
+                      aria-label="Clear ID No filter"
+                    >
+                      <X className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {ordersLoading && filteredOrders.length === 0 ? (
@@ -569,10 +746,12 @@ export function ShopBentoDashboard({
                 <div className="py-10 px-4 text-center rounded-xl bg-black/5 space-y-1.5">
                   <FileText className="w-7 h-7 text-neutral-700 mx-auto" aria-hidden="true" />
                   <div className="text-sm font-sans font-bold text-[#0F1115]">
-                    No print jobs waiting
+                    {normalizedCounterId.length === 4 ? `No jobs for ID No ${normalizedCounterId}` : 'No print jobs waiting'}
                   </div>
                   <p className="text-xs font-sans text-neutral-700 max-w-sm mx-auto">
-                    New customer requests sent to {shop.shop_name} appear here automatically.
+                    {normalizedCounterId.length === 4
+                      ? 'Clear the ID filter to view all waiting jobs.'
+                      : `New customer requests sent to ${shop.shop_name} appear here automatically.`}
                   </p>
                 </div>
               ) : (
@@ -585,6 +764,7 @@ export function ShopBentoDashboard({
                     const selectedPrinter =
                       detectedPrinters.find((p) => p.id === assignedPrinterId) || primaryPrinter || null;
                     const isUpdating = updatingOrderId === order.id;
+                    const customerIdNo = getCustomerOtp(order.customer_id || order.customer?.id);
 
                     return (
                       <div key={order.id} className="py-3.5 space-y-2.5">
@@ -596,6 +776,10 @@ export function ShopBentoDashboard({
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-black text-[#FDE09B] text-[10px] font-sans font-semibold uppercase tracking-wide">
                                 {order.status.replace(/_/g, ' ')}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-white/85 border border-black/20 text-[#0F1115] text-[10px] font-mono font-bold tabular-nums inline-flex items-center gap-1">
+                                <KeyRound className="w-2.5 h-2.5 text-[#D93200]" aria-hidden="true" />
+                                <span>ID: {customerIdNo}</span>
                               </span>
                               {fileId && (
                                 <button
@@ -1263,6 +1447,96 @@ export function ShopBentoDashboard({
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL: COUNTER QR STANDEE & UNIQUE SHOP ID                        */}
+      {/* ================================================================= */}
+      {showQrModal && (
+        <div
+          onClick={() => setShowQrModal(false)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-backdrop-in"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shop-qr-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-[24px] bg-[#FAF9F6] text-[#0F1115] p-6 border border-black/20 shadow-2xl space-y-4 animate-panel-in"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-black/10 pb-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#D93200]">
+                  Unique Counter QR &amp; ID
+                </div>
+                <h2
+                  id="shop-qr-modal-title"
+                  className="font-serif text-xl font-bold text-[#0F1115] truncate mt-0.5"
+                >
+                  {shop.shop_name}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="w-8 h-8 rounded-full bg-black hover:bg-[#D93200] text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                aria-label="Close counter QR modal"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="rounded-[20px] bg-white border-2 border-black p-5 flex flex-col items-center gap-3 text-center">
+              <span className="px-3.5 py-1 rounded-full bg-black text-[#FDE09B] font-mono font-black text-sm tracking-wider tabular-nums">
+                SHOP ID: {shopUniqueId}
+              </span>
+
+              {shopQrDataUrl && (
+                <img
+                  src={shopQrDataUrl}
+                  alt={`QR Code for ${shop.shop_name}`}
+                  className="w-56 h-56 rounded-xl border border-black/15"
+                />
+              )}
+
+              <p className="text-xs font-sans text-neutral-700 leading-relaxed max-w-xs">
+                Walk-in customers can scan this QR using the Prinrox web app or their phone camera to upload documents directly to your shop.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-sans font-bold text-neutral-700 block">
+                Customer Web App URL encoded in QR
+              </label>
+              <input
+                type="url"
+                value={qrBaseUrl}
+                onChange={(e) => handleSaveQrBaseUrl(e.target.value)}
+                placeholder="http://localhost:5173"
+                className="w-full h-9 px-3 rounded-xl bg-white border border-black/25 text-xs font-mono text-[#0F1115] focus:outline-none focus:border-[#D93200]"
+              />
+            </div>
+
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="h-11 px-4 rounded-full border border-black/25 hover:bg-black/5 text-xs font-sans font-semibold text-[#0F1115] transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Print</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadShopQrPoster}
+                className="flex-1 h-11 rounded-full bg-[#D93200] hover:bg-black text-white font-sans text-xs font-bold transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Download QR Standee</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
