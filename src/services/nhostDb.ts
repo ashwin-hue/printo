@@ -184,10 +184,10 @@ export async function fetchShopByOwner(ownerId: string): Promise<Shop | null> {
       return null;
     }
     const shop = res.body?.data?.shops?.[0] || null;
-    if (shop) {
-      // Automatically ensure data bucket exists when logged in
+    if (shop && !shop.bucket_id) {
+      // Create and bind shop storage bucket once when missing
       const ensuredBucket = await ensureShopBucket(shop);
-      if (ensuredBucket && !shop.bucket_id) {
+      if (ensuredBucket) {
         shop.bucket_id = ensuredBucket;
       }
     }
@@ -663,7 +663,14 @@ export async function toggleShopStatus(shopId: string, isActive: boolean): Promi
 export async function fetchShopOrders(shopId: string): Promise<Order[]> {
   const query = `
     query GetShopOrders($shopId: uuid!) {
-      orders(where: { shop_id: { _eq: $shopId } }, order_by: { created_at: desc }) {
+      orders(
+        where: {
+          shop_id: { _eq: $shopId }
+          status: { _in: ["pending", "accepted", "printing"] }
+        }
+        order_by: { created_at: desc }
+        limit: 50
+      ) {
         id
         order_number
         customer_id
@@ -674,7 +681,6 @@ export async function fetchShopOrders(shopId: string): Promise<Order[]> {
         customer_notes
         created_at
         customer {
-          id
           full_name
           email
           phone
@@ -682,19 +688,14 @@ export async function fetchShopOrders(shopId: string): Promise<Order[]> {
         order_documents {
           id
           copies
-          page_range
           color_mode
           paper_size
           sides
-          orientation
           binding_type
-          price
           document {
             id
             storage_file_id
             file_name
-            storage_path
-            page_count
           }
         }
       }
@@ -718,23 +719,42 @@ export async function fetchShopOrders(shopId: string): Promise<Order[]> {
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<boolean> {
-  const query = `
-    mutation UpdateOrderStatus($orderId: uuid!, $status: order_status!) {
-      update_orders_by_pk(
-        pk_columns: { id: $orderId }
-        _set: { status: $status }
-      ) {
-        id
-        status
-        updated_at
+  const readyAt =
+    status === 'ready_for_collection' || status === 'completed'
+      ? new Date().toISOString()
+      : null;
+
+  const query = readyAt
+    ? `
+      mutation UpdateOrderReadyStatus($orderId: uuid!, $status: order_status!, $completedAt: timestamptz!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { status: $status, completed_at: $completedAt }
+        ) {
+          id
+          status
+          completed_at
+          updated_at
+        }
       }
-    }
-  `;
+    `
+    : `
+      mutation UpdateOrderStatus($orderId: uuid!, $status: order_status!) {
+        update_orders_by_pk(
+          pk_columns: { id: $orderId }
+          _set: { status: $status }
+        ) {
+          id
+          status
+          updated_at
+        }
+      }
+    `;
 
   try {
     const res = await nhost.graphql.request({
       query,
-      variables: { orderId, status },
+      variables: readyAt ? { orderId, status, completedAt: readyAt } : { orderId, status },
     });
     if (res.body?.errors?.length) {
       console.error('Failed to update order status:', res.body.errors);
@@ -744,5 +764,325 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
   } catch (err) {
     console.error('Network error updating order status:', err);
     return false;
+  }
+}
+
+export async function markOrderReadyForCollection(orderId: string): Promise<boolean> {
+  return updateOrderStatus(orderId, 'ready_for_collection');
+}
+
+export async function downloadBucketFileBlob(fileId: string): Promise<Blob | null> {
+  try {
+    const res = await nhost.storage.getFile(fileId);
+    return res.body instanceof Blob ? res.body : null;
+  } catch (err) {
+    console.error('Failed to download bucket file blob:', err);
+    return null;
+  }
+}
+
+export async function sendOrderCollectNotification(params: {
+  customerId: string;
+  shopName: string;
+  fileName: string;
+  customerIdNo: string;
+}): Promise<{ ok: boolean; notificationId?: string; error?: string }> {
+  // Omit order_id (keep NULL) because notifications.order_id uses ON DELETE CASCADE,
+  // which would delete the notification immediately when cleanupPrintedOrder removes the order row.
+  const mutation = `
+    mutation PushCollectNotification(
+      $userId: uuid!
+      $title: String!
+      $message: String!
+    ) {
+      insert_notifications_one(object: {
+        user_id: $userId
+        title: $title
+        message: $message
+        notification_type: "ready_for_collection"
+        is_read: false
+      }) {
+        id
+        created_at
+      }
+    }
+  `;
+
+  const title = 'Ready to Collect';
+  const message = `${params.shopName} finished printing ${params.fileName}. Show ID No ${params.customerIdNo} at the counter to collect.`;
+
+  try {
+    const res = await nhost.graphql.request<{ insert_notifications_one: { id: string } | null }>({
+      query: mutation,
+      variables: {
+        userId: params.customerId,
+        title: title.slice(0, 255),
+        message,
+      },
+    });
+    const insertedId = res.body?.data?.insert_notifications_one?.id;
+    if (!insertedId) {
+      const msg = res.body?.errors?.[0]?.message || 'Notification insert returned no id.';
+      return { ok: false, error: msg };
+    }
+    return { ok: true, notificationId: insertedId };
+  } catch (err: any) {
+    const msg = err?.body?.errors?.[0]?.message || err?.message || 'Failed to push collect notification.';
+    console.error('Push collect notification error:', err);
+    return { ok: false, error: msg };
+  }
+}
+
+export interface CleanupPrintedOrderResult {
+  deletedOrder: boolean;
+  deletedDocuments: number;
+  deletedFiles: number;
+  permissionMissing?: boolean;
+  error?: string;
+}
+
+async function deleteBucketFiles(storageFileIds: string[]): Promise<number> {
+  if (storageFileIds.length === 0) return 0;
+
+  const storageResults = await Promise.all(
+    storageFileIds.map(async (fileId) => {
+      try {
+        await nhost.storage.deleteFile(fileId);
+        return true;
+      } catch (storageErr) {
+        console.warn(`Storage deleteFile failed for ${fileId}, trying GraphQL deleteFile:`, storageErr);
+        try {
+          await nhost.graphql.request({
+            query: `mutation DeleteBucketFile($fileId: uuid!) { deleteFile(id: $fileId) { id } }`,
+            variables: { fileId },
+          });
+          return true;
+        } catch (gqlFileErr) {
+          console.warn(`Could not delete bucket file ${fileId}:`, gqlFileErr);
+          return false;
+        }
+      }
+    })
+  );
+
+  return storageResults.filter(Boolean).length;
+}
+
+/**
+ * Removes a printed order and its linked document/storage records once the
+ * customer's collection notification has been pushed.
+ * Purges storage blobs first so heavy files are always reclaimed even if DB row delete permissions are pending.
+ */
+export async function cleanupPrintedOrder(order: Order): Promise<CleanupPrintedOrderResult> {
+  const documentIds = Array.from(
+    new Set(
+      (order.order_documents || [])
+        .map((od) => od.document?.id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const storageFileIds = Array.from(
+    new Set(
+      (order.order_documents || [])
+        .map((od) => od.document?.storage_file_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  // 1. Delete uploaded storage objects immediately so downloaded files do not linger in Nhost Storage
+  const deletedFiles = await deleteBucketFiles(storageFileIds);
+
+  // 2 & 3. Atomic batched order + unreferenced documents delete in one GraphQL round-trip
+  let deletedDocuments = 0;
+  try {
+    if (documentIds.length > 0) {
+      const batchRes = await nhost.graphql.request<{
+        delete_orders_by_pk: { id: string } | null;
+        delete_documents: { affected_rows: number } | null;
+      }>({
+        query: `
+          mutation DeletePrintedOrderAndDocs($orderId: uuid!, $docIds: [uuid!]!) {
+            delete_orders_by_pk(id: $orderId) {
+              id
+            }
+            delete_documents(where: { id: { _in: $docIds } }) {
+              affected_rows
+            }
+          }
+        `,
+        variables: { orderId: order.id, docIds: documentIds },
+      });
+      if (batchRes.body?.errors?.length) {
+        throw new Error(batchRes.body.errors[0]?.message || 'Unable to delete order.');
+      }
+      deletedDocuments = batchRes.body?.data?.delete_documents?.affected_rows ?? documentIds.length;
+    } else {
+      const res = await nhost.graphql.request<{ delete_orders_by_pk: { id: string } | null }>({
+        query: `
+          mutation DeletePrintedOrder($orderId: uuid!) {
+            delete_orders_by_pk(id: $orderId) {
+              id
+            }
+          }
+        `,
+        variables: { orderId: order.id },
+      });
+      if (res.body?.errors?.length) {
+        throw new Error(res.body.errors[0]?.message || 'Unable to delete order.');
+      }
+    }
+  } catch (err: any) {
+    const msg = err?.body?.errors?.[0]?.message || err?.message || 'Unable to delete order.';
+    // Fallback if delete_documents failed due to partial FK sharing or missing documents permission
+    if (documentIds.length > 0 && /delete_documents|restrict|foreign key/i.test(msg)) {
+      try {
+        await nhost.graphql.request({
+          query: `mutation DeletePrintedOrder($orderId: uuid!) { delete_orders_by_pk(id: $orderId) { id } }`,
+          variables: { orderId: order.id },
+        });
+      } catch (orderErr: any) {
+        const orderMsg = orderErr?.body?.errors?.[0]?.message || orderErr?.message || msg;
+        return {
+          deletedOrder: false,
+          deletedDocuments: 0,
+          deletedFiles,
+          permissionMissing: /delete_orders_by_pk|not found|permission/i.test(orderMsg),
+          error: orderMsg,
+        };
+      }
+    } else {
+      console.error('Order cleanup error:', err);
+      // Clear storage_file_id pointers on documents when storage files are already deleted
+      if (deletedFiles > 0 && documentIds.length > 0) {
+        try {
+          await nhost.graphql.request({
+            query: `
+              mutation ClearDeletedDocFileRefs($docIds: [uuid!]!) {
+                update_documents(where: { id: { _in: $docIds } }, _set: { storage_file_id: null }) {
+                  affected_rows
+                }
+              }
+            `,
+            variables: { docIds: documentIds },
+          });
+        } catch {
+          // Ignore if shop role cannot update customer document rows
+        }
+      }
+      return {
+        deletedOrder: false,
+        deletedDocuments: 0,
+        deletedFiles,
+        permissionMissing: /delete_orders_by_pk|not found|permission/i.test(msg),
+        error: msg,
+      };
+    }
+  }
+
+  return {
+    deletedOrder: true,
+    deletedDocuments,
+    deletedFiles,
+  };
+}
+
+/**
+ * Deletes heavy uploaded document blobs from Nhost Storage right after printing finishes,
+ * while retaining the lightweight ready_for_collection order row for 8 hours so customers can collect.
+ */
+export async function purgePrintedOrderStorage(order: Order): Promise<number> {
+  const documentIds = Array.from(
+    new Set(
+      (order.order_documents || [])
+        .map((od) => od.document?.id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const storageFileIds = Array.from(
+    new Set(
+      (order.order_documents || [])
+        .map((od) => od.document?.storage_file_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  const deletedFiles = await deleteBucketFiles(storageFileIds);
+  if (deletedFiles > 0 && documentIds.length > 0) {
+    try {
+      await nhost.graphql.request({
+        query: `
+          mutation ClearPrintedDocFileRefs($docIds: [uuid!]!) {
+            update_documents(where: { id: { _in: $docIds } }, _set: { storage_file_id: null }) {
+              affected_rows
+            }
+          }
+        `,
+        variables: { docIds: documentIds },
+      });
+    } catch {
+      // Non-fatal if shop role cannot clear customer document storage pointer
+    }
+  }
+  return deletedFiles;
+}
+
+export const READY_FOR_COLLECTION_TTL_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * Queries and removes this shop's ready_for_collection/completed orders once 8 hours
+ * have elapsed since completion, keeping the database and storage lean.
+ */
+export async function cleanupExpiredShopOrders(
+  shopId: string,
+  ttlMs: number = READY_FOR_COLLECTION_TTL_MS
+): Promise<number> {
+  try {
+    const res = await nhost.graphql.request<{ orders: Order[] }>({
+      query: `
+        query GetShopFinishedOrders($shopId: uuid!) {
+          orders(
+            where: {
+              shop_id: { _eq: $shopId }
+              status: { _in: ["ready_for_collection", "completed"] }
+            }
+            limit: 50
+          ) {
+            id
+            status
+            completed_at
+            updated_at
+            created_at
+            order_documents {
+              document {
+                id
+                storage_file_id
+              }
+            }
+          }
+        }
+      `,
+      variables: { shopId },
+    });
+
+    if (res.body?.errors?.length) return 0;
+
+    const nowMs = Date.now();
+    const expiredOrders = (res.body?.data?.orders || []).filter((o) => {
+      const stamp = o.completed_at || o.updated_at || o.created_at;
+      const readyMs = stamp ? Date.parse(stamp) : NaN;
+      return !Number.isNaN(readyMs) && nowMs - readyMs >= ttlMs;
+    });
+
+    if (expiredOrders.length === 0) return 0;
+
+    let removedCount = 0;
+    for (const exp of expiredOrders) {
+      const result = await cleanupPrintedOrder(exp);
+      if (result.deletedOrder) removedCount += 1;
+    }
+    return removedCount;
+  } catch (err) {
+    console.warn('Expired shop order cleanup error:', err);
+    return 0;
   }
 }

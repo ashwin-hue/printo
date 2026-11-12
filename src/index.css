@@ -68,6 +68,26 @@
   scrollbar-width: none;
 }
 
+/* Visible sleek scrollbar for scrollable queue containers on light/butter cards */
+.queue-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 17, 21, 0.35) rgba(15, 17, 21, 0.08);
+}
+.queue-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.queue-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 17, 21, 0.08);
+  border-radius: 9999px;
+}
+.queue-scroll::-webkit-scrollbar-thumb {
+  background: rgba(15, 17, 21, 0.35);
+  border-radius: 9999px;
+}
+.queue-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 17, 21, 0.6);
+}
+
 /* Glass & Card Panels */
 .glass-panel {
   background: rgba(255, 255, 255, 0.82);

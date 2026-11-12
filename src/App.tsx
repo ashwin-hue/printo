@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight,
   Check,
@@ -20,18 +20,20 @@ import {
   updateShopDetails,
   toggleShopStatus,
   fetchShopOrders,
-  updateOrderStatus,
+  markOrderReadyForCollection,
+  purgePrintedOrderStorage,
+  cleanupExpiredShopOrders,
   upsertShopOwnerProfile,
-  fetchShopBucketFiles,
   getBucketFileUrl,
+  sendOrderCollectNotification,
 } from './services/nhostDb';
+import { getCustomerOtp } from './utils/otp';
 import {
   detectConnectedPrinters,
   scanUsbHardware,
-  dispatchToSystemPrinter,
   type DetectedPrinter,
 } from './services/localPrinters';
-import type { Shop, Order, OrderStatus, BucketFile } from './types/database';
+import type { Shop, Order } from './types/database';
 import { ShopBentoDashboard } from './components/ShopBentoDashboard';
 import { OpenFreeMapPicker } from './components/OpenFreeMapPicker';
 import heroCatImg from './assets/hero-cat.jpg';
@@ -85,11 +87,11 @@ export function App() {
   const [shop, setShop] = useState<Shop | null>(null);
   const [checkingShop, setCheckingShop] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [bucketFiles, setBucketFiles] = useState<BucketFile[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
   // Live Auto-Detected Local System Printers (NEVER stored in DB)
   const [detectedPrinters, setDetectedPrinters] = useState<DetectedPrinter[]>([]);
+  const [spoolerEndpointMode, setSpoolerEndpointMode] = useState<'dev' | 'bridge' | null>(null);
   const [scanningPrinters, setScanningPrinters] = useState(false);
   const [usbNotice, setUsbNotice] = useState<string | null>(null);
 
@@ -121,6 +123,7 @@ export function App() {
     try {
       const result = await detectConnectedPrinters();
       setDetectedPrinters(result.printers);
+      setSpoolerEndpointMode(result.endpointMode || null);
     } finally {
       setScanningPrinters(false);
     }
@@ -176,7 +179,6 @@ export function App() {
         } else {
           setShop(null);
           setOrders([]);
-          setBucketFiles([]);
         }
       });
 
@@ -199,22 +201,70 @@ export function App() {
     }
   };
 
-  const refreshDashboardData = async (targetShop: Shop) => {
-    setOrdersLoading(true);
+  const refreshDashboardData = async (targetShop: Shop, silent = false) => {
+    if (!silent) {
+      setOrdersLoading(true);
+    }
     try {
-      const [ordersList, filesList] = await Promise.all([
+      const [ordersList] = await Promise.all([
         fetchShopOrders(targetShop.id),
-        targetShop.bucket_id ? fetchShopBucketFiles(targetShop.bucket_id) : Promise.resolve([]),
-        scanLocalPrinters(),
+        silent ? Promise.resolve() : scanLocalPrinters(),
       ]);
       setOrders(ordersList);
-      setBucketFiles(filesList);
+      runPeriodicExpiredCleanup(targetShop.id);
     } catch (e) {
       console.error(e);
     } finally {
-      setOrdersLoading(false);
+      if (!silent) {
+        setOrdersLoading(false);
+      }
     }
   };
+
+  const pollInFlightRef = useRef(false);
+  const lastExpiredCleanupAtRef = useRef(0);
+
+  const runPeriodicExpiredCleanup = (shopId: string) => {
+    const now = Date.now();
+    if (now - lastExpiredCleanupAtRef.current < 5 * 60 * 1000) return;
+    lastExpiredCleanupAtRef.current = now;
+    cleanupExpiredShopOrders(shopId).catch((err) => {
+      console.warn('Background 8h order cleanup warning:', err);
+    });
+  };
+
+  // Poll incoming customer orders every 10s while tab is visible, with overlap guard
+  useEffect(() => {
+    if (!shop?.id) return;
+    let active = true;
+
+    const silentPoll = async () => {
+      if (!active || pollInFlightRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      pollInFlightRef.current = true;
+      try {
+        await refreshDashboardData(shop, true);
+      } finally {
+        pollInFlightRef.current = false;
+      }
+    };
+
+    const intervalId = window.setInterval(silentPoll, 10000);
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        silentPoll();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [shop?.id]);
 
   const handleScanUsbPrinter = async () => {
     setUsbNotice(null);
@@ -304,7 +354,6 @@ export function App() {
     setSessionUser(null);
     setShop(null);
     setOrders([]);
-    setBucketFiles([]);
     setAuthSuccess(null);
     setAuthError(null);
     setEmail('');
@@ -452,11 +501,48 @@ export function App() {
     }
   };
 
-  const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
-    const success = await updateOrderStatus(orderId, nextStatus);
-    if (success && shop) {
-      refreshDashboardData(shop);
+  const completePrintedOrder = async (
+    order: Order
+  ): Promise<{ ok: boolean; message: string }> => {
+    if (!shop) {
+      return { ok: false, message: 'Shop session unavailable.' };
     }
+
+    // 1. Automatically push customer "ready to collect" notification once printed
+    const primaryFileName =
+      order.order_documents?.[0]?.document?.file_name || 'your print job';
+    const customerIdNo = getCustomerOtp(order.customer_id || order.customer?.id);
+    const notifResult = await sendOrderCollectNotification({
+      customerId: order.customer_id,
+      shopName: shop.shop_name,
+      fileName: primaryFileName,
+      customerIdNo,
+    });
+
+    if (!notifResult.ok) {
+      return {
+        ok: false,
+        message: notifResult.error || 'Printed, but failed to notify customer. Order kept in DB.',
+      };
+    }
+
+    // 2. Purge heavy uploaded storage file(s) immediately after printing,
+    // then mark order ready_for_collection so customers see pickup status for 8 hours before auto-deletion.
+    await purgePrintedOrderStorage(order);
+    const markedReady = await markOrderReadyForCollection(order.id);
+    if (!markedReady) {
+      return {
+        ok: false,
+        message: 'Customer notified, but could not mark order Ready for Collection.',
+      };
+    }
+
+    setOrders((prev) => prev.filter((item) => item.id !== order.id));
+    refreshDashboardData(shop, true);
+    return {
+      ok: true,
+      message: `Printed for ID: ${customerIdNo} · Ready for collection (auto-deletes in 8h)`,
+    };
   };
 
   const handleOpenBucketFile = async (fileId?: string | null) => {
@@ -466,19 +552,6 @@ export function App() {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
       alert('Could not retrieve presigned URL for this file.');
-    }
-  };
-
-  const handlePrintJobFile = async (fileId?: string | null, printer?: DetectedPrinter | null) => {
-    if (!fileId) return;
-    const url = await getBucketFileUrl(fileId);
-    if (!url) {
-      alert('Could not retrieve PDF URL for printing.');
-      return;
-    }
-    const ok = await dispatchToSystemPrinter(url, printer);
-    if (!ok) {
-      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -995,18 +1068,18 @@ export function App() {
     <ShopBentoDashboard
       shop={shop}
       orders={orders}
-      bucketFiles={bucketFiles}
       detectedPrinters={detectedPrinters}
+      spoolerEndpointMode={spoolerEndpointMode}
       scanningPrinters={scanningPrinters}
       ordersLoading={ordersLoading}
       sessionEmail={sessionUser.email}
       usbNotice={usbNotice}
       onRefresh={() => refreshDashboardData(shop)}
+      onRefreshPrinters={scanLocalPrinters}
       onScanUsbPrinter={handleScanUsbPrinter}
       onToggleShopOnline={handleToggleOnline}
-      onStatusChange={handleStatusChange}
+      onCompleteOrder={completePrintedOrder}
       onOpenBucketFile={handleOpenBucketFile}
-      onPrintJobFile={handlePrintJobFile}
       onUpdateLocation={handleUpdateLocation}
       onVerifyPassword={handleVerifyPassword}
       onUpdateShopDetails={handleUpdateShopDetails}

@@ -3,14 +3,12 @@ import {
   Check,
   Clock,
   Download,
-  ExternalLink,
   FileText,
   KeyRound,
   Loader2,
   Lock,
   LogOut,
   MapPin,
-  PackageCheck,
   Phone,
   Plus,
   Power,
@@ -18,13 +16,12 @@ import {
   QrCode,
   RefreshCw,
   Settings,
-  CheckCircle2,
   ArrowRight,
   Usb,
   X
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import type { Shop, Order, OrderStatus, BucketFile } from '../types/database';
+import type { Shop, Order } from '../types/database';
 import type { DetectedPrinter } from '../services/localPrinters';
 import { getCustomerOtp } from '../utils/otp';
 import {
@@ -33,6 +30,7 @@ import {
   getShopUniqueCode,
 } from '../utils/shopQr';
 import { OpenFreeMapPicker, type SelectedLocation } from './OpenFreeMapPicker';
+import { PrintDispatchModal } from './PrintDispatchModal';
 
 const AVAILABLE_SHOP_SERVICES = [
   'Laser Printing',
@@ -47,18 +45,18 @@ const AVAILABLE_SHOP_SERVICES = [
 interface ShopBentoDashboardProps {
   shop: Shop;
   orders: Order[];
-  bucketFiles: BucketFile[];
   detectedPrinters: DetectedPrinter[];
+  spoolerEndpointMode: 'dev' | 'bridge' | null;
   scanningPrinters: boolean;
   ordersLoading: boolean;
   sessionEmail?: string;
   usbNotice?: string | null;
   onRefresh: () => void;
+  onRefreshPrinters: () => Promise<void>;
   onScanUsbPrinter: () => void;
   onToggleShopOnline: () => void;
-  onStatusChange: (orderId: string, status: OrderStatus) => void;
+  onCompleteOrder: (order: Order) => Promise<{ ok: boolean; message: string }>;
   onOpenBucketFile: (fileId?: string | null) => void;
-  onPrintJobFile: (fileId?: string | null, printer?: DetectedPrinter | null) => void;
   onUpdateLocation: (loc: SelectedLocation) => Promise<boolean>;
   onVerifyPassword: (pwd: string) => Promise<boolean>;
   onUpdateShopDetails: (updates: {
@@ -82,34 +80,26 @@ interface ShopBentoDashboardProps {
   onSignOut: () => void;
 }
 
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
-
 export function ShopBentoDashboard({
   shop,
   orders,
-  bucketFiles,
   detectedPrinters,
+  spoolerEndpointMode,
   scanningPrinters,
   ordersLoading,
   sessionEmail,
   usbNotice,
   onRefresh,
+  onRefreshPrinters,
   onScanUsbPrinter,
   onToggleShopOnline,
-  onStatusChange,
+  onCompleteOrder,
   onOpenBucketFile,
-  onPrintJobFile,
   onUpdateLocation,
   onVerifyPassword,
   onUpdateShopDetails,
   onSignOut,
 }: ShopBentoDashboardProps) {
-  const [jobFilter, setJobFilter] = useState<'ALL' | 'PENDING' | 'PRINTING' | 'READY' | 'DONE'>('ALL');
   const [selectedPrintersMap, setSelectedPrintersMap] = useState<Record<string, string>>({});
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [draftLocation, setDraftLocation] = useState<SelectedLocation>({
@@ -148,7 +138,10 @@ export function ShopBentoDashboard({
   const [editColorSingle, setEditColorSingle] = useState('10');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [activePrintOrder, setActivePrintOrder] = useState<{
+    order: Order;
+    printerId?: string;
+  } | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
   const [counterIdQuery, setCounterIdQuery] = useState('');
   const [showQrModal, setShowQrModal] = useState(false);
@@ -254,18 +247,15 @@ export function ShopBentoDashboard({
 
   useEffect(() => {
     if (!feedbackToast) return;
-    const timer = window.setTimeout(() => setFeedbackToast(null), 2600);
+    const timer = window.setTimeout(() => setFeedbackToast(null), 4500);
     return () => window.clearTimeout(timer);
   }, [feedbackToast]);
 
-  const triggerOrderStatus = async (orderId: string, nextStatus: OrderStatus) => {
-    setUpdatingOrderId(orderId);
-    try {
-      await Promise.resolve(onStatusChange(orderId, nextStatus));
-      setFeedbackToast(`Order marked ${nextStatus.replace(/_/g, ' ')}`);
-    } finally {
-      setUpdatingOrderId(null);
-    }
+  const triggerPrintOrder = (order: Order, printer?: DetectedPrinter | null) => {
+    setActivePrintOrder({
+      order,
+      printerId: printer?.id,
+    });
   };
 
   const openSettingsModal = () => {
@@ -375,6 +365,9 @@ export function ShopBentoDashboard({
     try {
       const ok = await onUpdateLocation(draftLocation);
       if (ok) {
+        if (draftLocation.address) setEditAddress(draftLocation.address);
+        if (draftLocation.city) setEditCity(draftLocation.city);
+        if (draftLocation.pincode) setEditPincode(draftLocation.pincode);
         setShowLocationModal(false);
         setFeedbackToast('Shop location updated');
       }
@@ -394,18 +387,13 @@ export function ShopBentoDashboard({
     if (normalizedCounterId.length === 4) {
       return getCustomerOtp(o.customer_id || o.customer?.id) === normalizedCounterId;
     }
-    if (jobFilter === 'ALL') return true;
-    if (jobFilter === 'PENDING') return o.status === 'pending' || o.status === 'accepted';
-    if (jobFilter === 'PRINTING') return o.status === 'printing';
-    if (jobFilter === 'READY') return o.status === 'ready_for_collection';
-    if (jobFilter === 'DONE') return o.status === 'completed';
     return true;
   });
 
   const primaryPrinter = detectedPrinters.find((p) => p.isDefault) || detectedPrinters[0];
 
   return (
-    <div className="min-h-screen w-full bg-black text-white font-sans antialiased selection:bg-[#FF3B00] selection:text-white p-2.5 sm:p-4 lg:p-5 flex flex-col gap-3.5">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden w-full bg-black text-white font-sans antialiased selection:bg-[#FF3B00] selection:text-white p-2.5 sm:p-3.5 flex flex-col gap-3">
 
       {feedbackToast && (
         <div
@@ -420,7 +408,7 @@ export function ShopBentoDashboard({
       {/* ================================================================= */}
       {/* ROW 1: MAIN OFF-WHITE HEADER CARD                                 */}
       {/* ================================================================= */}
-      <header className="w-full rounded-[24px] bg-[#FAF9F6] text-[#0F1115] px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-xl">
+      <header className="w-full shrink-0 rounded-[24px] bg-[#FAF9F6] text-[#0F1115] px-5 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4 shadow-xl">
         
         {/* Left: Brand & Shop Name */}
         <div className="flex items-center gap-4">
@@ -446,7 +434,7 @@ export function ShopBentoDashboard({
           
           <button
             type="button"
-            onClick={() => setJobFilter('ALL')}
+            onClick={() => setCounterIdQuery('')}
             className="h-10 px-3.5 rounded-full border border-black/25 bg-white hover:border-black transition-colors flex items-center gap-2 cursor-pointer"
           >
             <span className="text-xs font-sans font-bold tracking-wide text-[#0F1115] uppercase">Print Jobs</span>
@@ -530,28 +518,28 @@ export function ShopBentoDashboard({
       {/* ================================================================= */}
       {/* ROW 3: MAIN 3-COLUMN BENTO GRID WORKSPACE                         */}
       {/* ================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-0">
         
         {/* --------------------------------------------------------------- */}
         {/* LEFT COLUMN: SHOP OVERVIEW CARD                                 */}
         {/* --------------------------------------------------------------- */}
-        <aside className="lg:col-span-3 rounded-[24px] bg-[#FAF9F6] text-[#0F1115] p-5 flex flex-col justify-between gap-4">
+        <aside className="lg:col-span-3 rounded-[24px] bg-[#FAF9F6] text-[#0F1115] p-4 sm:p-5 flex flex-col justify-between gap-2.5 min-h-0 overflow-hidden">
           
-          <div className="space-y-4 flex-1 flex flex-col">
-            <div>
-              <h1 className="font-serif font-black text-3xl sm:text-[36px] leading-[1.04] tracking-tight text-[#0F1115] text-balance">
+          <div className="space-y-2.5 flex-1 min-h-0 flex flex-col">
+            <div className="shrink-0">
+              <h1 className="font-serif font-black text-2xl sm:text-3xl leading-[1.06] tracking-tight text-[#0F1115] text-balance">
                 {shop.shop_name}
               </h1>
-              <p className="mt-2.5 text-xs font-sans text-neutral-700 leading-relaxed">
+              <p className="mt-1.5 text-xs font-sans text-neutral-700 leading-relaxed line-clamp-2">
                 {shop.description ||
                   'Campus digital printing shop for fast assignments, notes, posters, and binding.'}
               </p>
             </div>
 
-            <div className="space-y-2.5 pt-3 border-t border-black/10 text-xs font-sans text-neutral-800">
+            <div className="shrink-0 space-y-1.5 pt-2.5 border-t border-black/10 text-xs font-sans text-neutral-800">
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-[#FF3B00] shrink-0 mt-0.5" aria-hidden="true" />
-                <span>
+                <span className="line-clamp-1">
                   {shop.address || 'Campus Block'}
                   {shop.city ? `, ${shop.city}` : ''}
                 </span>
@@ -569,7 +557,7 @@ export function ShopBentoDashboard({
               </div>
             </div>
 
-            <div className="space-y-2 pt-3 border-t border-black/10">
+            <div className="shrink-0 space-y-1.5 pt-2.5 border-t border-black/10">
               <div className="text-xs font-sans font-semibold text-neutral-700">
                 Services Offered
               </div>
@@ -577,7 +565,7 @@ export function ShopBentoDashboard({
                 {(shop.services || []).map((srv) => (
                   <span
                     key={srv.id}
-                    className="px-2.5 py-1 rounded-full bg-black/5 border border-black/15 text-xs font-sans font-medium text-[#0F1115]"
+                    className="px-2.5 py-0.5 rounded-full bg-black/5 border border-black/15 text-[11px] font-sans font-medium text-[#0F1115]"
                   >
                     {srv.service_name}
                   </span>
@@ -585,75 +573,52 @@ export function ShopBentoDashboard({
               </div>
             </div>
 
-            {/* Unique Shop ID + Scannable Counter QR Card */}
-            <div className="rounded-[18px] bg-black text-white p-3.5 flex items-center justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
-                  Unique Shop ID
-                </div>
-                <div className="font-mono font-black text-sm tracking-wider text-[#FDE09B] tabular-nums">
-                  {shopUniqueId}
+            {/* Enlarged Unique Shop ID + Scannable Counter QR Card filling sidebar space */}
+            <div className="flex-1 min-h-[210px] lg:min-h-0 rounded-[20px] bg-black text-white p-4 flex flex-col justify-between gap-2.5">
+              <div className="shrink-0 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">
+                    Unique Shop ID
+                  </div>
+                  <div className="font-mono font-black text-base tracking-wider text-[#FDE09B] tabular-nums">
+                    {shopUniqueId}
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowQrModal(true)}
-                  className="mt-1 px-2.5 py-1 rounded-full bg-[#D93200] hover:bg-white hover:text-[#0F1115] text-white text-[11px] font-sans font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-full bg-[#D93200] hover:bg-white hover:text-[#0F1115] text-white text-[11px] font-sans font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                 >
-                  <QrCode className="w-3 h-3" aria-hidden="true" />
+                  <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Counter QR</span>
                 </button>
               </div>
+
               {shopQrDataUrl && (
                 <button
                   type="button"
                   onClick={() => setShowQrModal(true)}
-                  className="w-16 h-16 rounded-xl bg-white p-1 shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                  className="flex-1 min-h-0 w-full flex items-center justify-center group cursor-pointer py-1"
                   title="Expand scannable Shop QR"
                   aria-label="Open counter QR code standee"
                 >
-                  <img
-                    src={shopQrDataUrl}
-                    alt={`${shop.shop_name} QR code`}
-                    className="w-full h-full object-contain"
-                  />
+                  <div className="h-full max-h-[240px] aspect-square max-w-full rounded-2xl bg-white p-2.5 shadow-lg group-hover:scale-[1.03] transition-transform flex items-center justify-center">
+                    <img
+                      src={shopQrDataUrl}
+                      alt={`${shop.shop_name} QR code`}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
                 </button>
               )}
-            </div>
 
-            <div className="flex-1 flex flex-col justify-end space-y-2 pt-3 border-t border-black/10">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-sans font-semibold text-neutral-700 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-[#FF3B00]" aria-hidden="true" />
-                  <span>Shop Location</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftLocation({
-                      latitude: Number(shop.latitude) || 12.9716,
-                      longitude: Number(shop.longitude) || 77.5946,
-                      address: shop.address || '',
-                      city: shop.city || '',
-                      pincode: shop.pincode || '',
-                    });
-                    setShowLocationModal(true);
-                  }}
-                  className="text-xs font-sans font-semibold text-[#D93200] hover:underline cursor-pointer"
-                >
-                  Edit Pin
-                </button>
+              <div className="shrink-0 text-center text-[11px] font-sans text-neutral-400">
+                Scan to upload directly to this shop queue
               </div>
-              <OpenFreeMapPicker
-                latitude={Number(shop.latitude) || 12.9716}
-                longitude={Number(shop.longitude) || 77.5946}
-                heightClass="h-48 lg:h-56"
-                interactive={false}
-                onChange={() => {}}
-              />
             </div>
           </div>
 
-          <div className="flex items-center justify-start pt-3 border-t border-black/10">
+          <div className="shrink-0 flex items-center justify-start pt-2.5 border-t border-black/10">
             <button
               type="button"
               onClick={openSettingsModal}
@@ -669,10 +634,10 @@ export function ShopBentoDashboard({
         {/* --------------------------------------------------------------- */}
         {/* CENTER COLUMN: CONTROL BAR + WARM CREAM ORDERS & FILES CARD     */}
         {/* --------------------------------------------------------------- */}
-        <section className="lg:col-span-6 flex flex-col gap-3.5">
+        <section className="lg:col-span-6 flex flex-col gap-3 min-h-0">
           
           {/* Top White Pill Control Bar */}
-          <div className="rounded-[24px] sm:rounded-full bg-[#FAF9F6] text-[#0F1115] px-5 py-2.5 flex items-center justify-between gap-3">
+          <div className="shrink-0 rounded-[24px] sm:rounded-full bg-[#FAF9F6] text-[#0F1115] px-5 py-2.5 flex items-center justify-between gap-3">
             <div className="text-lg sm:text-xl font-sans font-bold tracking-tight tabular-nums text-[#0F1115]">
               ₹{totalRevenue.toFixed(0)}
             </div>
@@ -694,12 +659,12 @@ export function ShopBentoDashboard({
           </div>
 
           {/* Center Giant Butter-Yellow Bento Card (#FDE09B) */}
-          <div className="flex-1 rounded-[24px] bg-[#FDE09B] text-[#0F1115] flex flex-col justify-between overflow-hidden">
+          <div className="flex-1 min-h-0 rounded-[24px] bg-[#FDE09B] text-[#0F1115] flex flex-col overflow-hidden">
             
             {/* TOP SECTION: CUSTOMER PRINT JOBS */}
-            <div className="p-5 sm:p-6 space-y-4">
+            <div className="p-5 sm:p-6 space-y-4 flex-1 min-h-0 flex flex-col">
               
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-2.5">
                   <h2 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#0F1115] text-balance">
                     Live Print Queue
@@ -755,7 +720,7 @@ export function ShopBentoDashboard({
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-black/15 border-t border-b border-black/15">
+                <div className="divide-y divide-black/15 border-t border-b border-black/15 flex-1 min-h-0 max-h-[460px] lg:max-h-none overflow-y-auto queue-scroll pr-1.5">
                   {filteredOrders.map((order) => {
                     const doc = order.order_documents?.[0];
                     const fileId = doc?.document?.storage_file_id;
@@ -763,7 +728,7 @@ export function ShopBentoDashboard({
                       selectedPrintersMap[order.id] || primaryPrinter?.id || '';
                     const selectedPrinter =
                       detectedPrinters.find((p) => p.id === assignedPrinterId) || primaryPrinter || null;
-                    const isUpdating = updatingOrderId === order.id;
+                    const isUpdating = activePrintOrder?.order.id === order.id;
                     const customerIdNo = getCustomerOtp(order.customer_id || order.customer?.id);
 
                     return (
@@ -771,15 +736,12 @@ export function ShopBentoDashboard({
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="space-y-1.5 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono font-bold tabular-nums text-xs text-[#0F1115]">
-                                #{order.order_number}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-black text-[#FDE09B] text-[10px] font-sans font-semibold uppercase tracking-wide">
-                                {order.status.replace(/_/g, ' ')}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-white/85 border border-black/20 text-[#0F1115] text-[10px] font-mono font-bold tabular-nums inline-flex items-center gap-1">
-                                <KeyRound className="w-2.5 h-2.5 text-[#D93200]" aria-hidden="true" />
+                              <span className="px-2.5 py-0.5 rounded-full bg-black text-[#FDE09B] text-[10px] font-mono font-bold tabular-nums inline-flex items-center gap-1">
+                                <KeyRound className="w-2.5 h-2.5 text-[#FF5A1F]" aria-hidden="true" />
                                 <span>ID: {customerIdNo}</span>
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-white/85 border border-black/20 text-[#0F1115] text-[10px] font-sans font-semibold uppercase tracking-wide">
+                                {order.status.replace(/_/g, ' ')}
                               </span>
                               {fileId && (
                                 <button
@@ -835,7 +797,7 @@ export function ShopBentoDashboard({
                             </div>
 
                             <div className="flex flex-wrap items-center gap-1.5">
-                              {detectedPrinters.length > 0 && order.status !== 'completed' && (
+                              {detectedPrinters.length > 0 && (
                                 <select
                                   value={assignedPrinterId}
                                   onChange={(e) =>
@@ -854,76 +816,19 @@ export function ShopBentoDashboard({
                                 </select>
                               )}
 
-                              {order.status === 'pending' && (
-                                <button
-                                  type="button"
-                                  disabled={isUpdating}
-                                  onClick={() => triggerOrderStatus(order.id, 'accepted')}
-                                  className="h-8 px-3.5 rounded-full bg-black hover:bg-[#D93200] text-white text-xs font-sans font-semibold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                                >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                                  ) : (
-                                    <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                                  )}
-                                  <span>{isUpdating ? 'Updating' : 'Accept'}</span>
-                                </button>
-                              )}
-
-                              {(order.status === 'accepted' || order.status === 'printing') && (
-                                <button
-                                  type="button"
-                                  disabled={isUpdating}
-                                  onClick={() => {
-                                    if (fileId) {
-                                      onPrintJobFile(fileId, selectedPrinter);
-                                    }
-                                    if (order.status === 'accepted') {
-                                      triggerOrderStatus(order.id, 'printing');
-                                    }
-                                  }}
-                                  className="h-8 px-3.5 rounded-full bg-[#D93200] hover:bg-black text-white text-xs font-sans font-semibold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                                >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                                  ) : (
-                                    <Printer className="w-3.5 h-3.5" aria-hidden="true" />
-                                  )}
-                                  <span>Print Now</span>
-                                </button>
-                              )}
-
-                              {order.status === 'printing' && (
-                                <button
-                                  type="button"
-                                  disabled={isUpdating}
-                                  onClick={() => triggerOrderStatus(order.id, 'ready_for_collection')}
-                                  className="h-8 px-3.5 rounded-full bg-emerald-700 hover:bg-black text-white text-xs font-sans font-semibold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                                >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                                  ) : (
-                                    <PackageCheck className="w-3.5 h-3.5" aria-hidden="true" />
-                                  )}
-                                  <span>Ready</span>
-                                </button>
-                              )}
-
-                              {order.status === 'ready_for_collection' && (
-                                <button
-                                  type="button"
-                                  disabled={isUpdating}
-                                  onClick={() => triggerOrderStatus(order.id, 'completed')}
-                                  className="h-8 px-3.5 rounded-full bg-black hover:bg-[#D93200] text-white text-xs font-sans font-semibold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-60"
-                                >
-                                  {isUpdating ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                                  ) : (
-                                    <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-                                  )}
-                                  <span>Complete</span>
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => triggerPrintOrder(order, selectedPrinter)}
+                                className="h-8 px-4 rounded-full bg-[#D93200] hover:bg-black text-white text-xs font-sans font-semibold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-60"
+                              >
+                                {isUpdating ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <Printer className="w-3.5 h-3.5" aria-hidden="true" />
+                                )}
+                                <span>{isUpdating ? 'Printing...' : 'Print'}</span>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -934,76 +839,16 @@ export function ShopBentoDashboard({
               )}
             </div>
 
-            {/* BOTTOM SECTION: CUSTOMER DOCUMENTS RECEIVED */}
-            <div
-              id="customer-files-section"
-              className="p-5 sm:p-6 border-t border-black/20 grid grid-cols-1 sm:grid-cols-12 gap-4 items-start"
-            >
-              <div className="sm:col-span-4">
-                <h3 className="font-serif text-lg font-bold tracking-tight text-[#0F1115] text-balance">
-                  Uploaded Files
-                </h3>
-              </div>
-
-              <div className="sm:col-span-8 space-y-2.5">
-                {bucketFiles.length === 0 ? (
-                  <p className="text-xs font-sans text-neutral-800 leading-relaxed">
-                    Uploaded customer PDFs and documents appear here for preview and printing.
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-44 overflow-y-auto no-scrollbar pr-1">
-                    {bucketFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white/80 border border-black/15"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-xs font-sans font-bold text-[#0F1115] truncate">{file.name}</div>
-                          <div className="text-[11px] font-sans text-neutral-700 flex items-center gap-1.5">
-                            <span className="font-mono tabular-nums">{formatBytes(file.size)}</span>
-                            {file.metadata?.customerEmail && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span className="truncate">{file.metadata.customerEmail}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => onPrintJobFile(file.id, primaryPrinter)}
-                            className="px-2.5 py-1 rounded-full bg-[#D93200] hover:bg-black text-white text-xs font-sans font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <Printer className="w-3 h-3" aria-hidden="true" />
-                            <span>Print</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onOpenBucketFile(file.id)}
-                            className="px-2.5 py-1 rounded-full bg-black hover:bg-neutral-800 text-white text-xs font-sans font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <ExternalLink className="w-3 h-3" aria-hidden="true" />
-                            <span>Open</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
           </div>
         </section>
 
         {/* --------------------------------------------------------------- */}
         {/* RIGHT COLUMN: CONNECTED PRINTERS & SHOP PRICING                 */}
         {/* --------------------------------------------------------------- */}
-        <aside className="lg:col-span-3 flex flex-col gap-3.5">
+        <aside className="lg:col-span-3 flex flex-col gap-3 min-h-0">
 
           {/* TOP CARD: BRIGHT VERMILION ORANGE CARD (YOUR RATES) */}
-          <div className="rounded-[24px] bg-[#FF3B00] text-[#0F1115] p-5 flex flex-col justify-between min-h-[200px]">
+          <div className="shrink-0 rounded-[24px] bg-[#FF3B00] text-[#0F1115] p-5 flex flex-col justify-between min-h-[175px]">
             <div className="flex items-start justify-between gap-2">
               <h2 className="font-serif text-xl font-bold tracking-tight text-[#0F1115] leading-snug text-balance">
                 Print Rates
@@ -1038,8 +883,8 @@ export function ShopBentoDashboard({
           </div>
 
           {/* BOTTOM WIDE WHITE CARD: CONNECTED PRINTERS */}
-          <div className="rounded-[24px] bg-[#FAF9F6] text-[#0F1115] p-4 sm:p-5 space-y-3.5">
-            <div className="flex items-center justify-between gap-2">
+          <div className="flex-1 min-h-0 rounded-[24px] bg-[#FAF9F6] text-[#0F1115] p-4 sm:p-5 flex flex-col gap-3 overflow-hidden">
+            <div className="flex items-center justify-between gap-2 shrink-0">
               <h2 className="font-serif text-lg font-bold tracking-tight text-[#0F1115] tabular-nums text-balance">
                 Local Printers ({detectedPrinters.length})
               </h2>
@@ -1060,19 +905,19 @@ export function ShopBentoDashboard({
             </div>
 
             {usbNotice && (
-              <div className="p-2.5 rounded-lg bg-[#FDE09B] text-xs font-sans font-medium text-[#0F1115] animate-panel-in">
+              <div className="shrink-0 p-2.5 rounded-lg bg-[#FDE09B] text-xs font-sans font-medium text-[#0F1115] animate-panel-in">
                 {usbNotice}
               </div>
             )}
 
-            <div className="space-y-2 max-h-56 overflow-y-auto no-scrollbar">
+            <div className="space-y-2 flex-1 min-h-0 max-h-60 lg:max-h-none overflow-y-auto queue-scroll pr-1">
               {detectedPrinters.length === 0 ? (
                 <div className="p-3 rounded-lg bg-black/5 border border-black/10 space-y-1">
                   <div className="text-xs font-sans font-bold text-[#0F1115]">
                     System Print Ready
                   </div>
                   <p className="text-xs font-sans text-neutral-700 leading-relaxed">
-                    Use <strong>Scan USB</strong> to pair a USB printer, or click <strong>Print Now</strong> on a job to pick a system printer.
+                    Use <strong>Scan USB</strong> to pair a USB printer, or click <strong>Print</strong> on a job to pick a system printer.
                   </p>
                 </div>
               ) : (
@@ -1098,12 +943,14 @@ export function ShopBentoDashboard({
                     <div className="flex items-center gap-1.5 shrink-0">
                       <span
                         className={`px-2 py-0.5 rounded-full text-[11px] font-sans font-semibold capitalize ${
-                          p.status === 'offline'
+                          p.status === 'offline' || p.status === 'paper_out' || p.status === 'paper_jam'
                             ? 'bg-rose-700 text-white'
-                            : 'bg-emerald-700 text-white'
+                            : p.status === 'paused' || p.status === 'attention'
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-emerald-700 text-white'
                         }`}
                       >
-                        {p.status}
+                        {p.statusLabel || p.status.replace(/_/g, ' ')}
                       </span>
                     </div>
                   </div>
@@ -1120,7 +967,7 @@ export function ShopBentoDashboard({
       {/* UPDATE SHOP LOCATION MODAL (OpenFreeMap)                          */}
       {/* ================================================================= */}
       {showLocationModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg rounded-[24px] bg-[#FAF9F6] text-[#0F1115] p-5 space-y-4 shadow-2xl border border-black/20 animate-panel-in">
             <div className="flex items-center justify-between">
               <h3 className="font-serif text-xl font-bold tracking-tight text-[#0F1115] text-balance">Update Shop Location</h3>
@@ -1304,9 +1151,27 @@ export function ShopBentoDashboard({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2 space-y-1.5">
-                    <label className="text-xs font-sans font-semibold text-neutral-800 block">
-                      Shop Address
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-sans font-semibold text-neutral-800 block">
+                        Shop Address
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraftLocation({
+                            latitude: Number(shop.latitude) || 12.9716,
+                            longitude: Number(shop.longitude) || 77.5946,
+                            address: editAddress || shop.address || '',
+                            city: editCity || shop.city || '',
+                            pincode: editPincode || shop.pincode || '',
+                          });
+                          setShowLocationModal(true);
+                        }}
+                        className="text-xs font-sans font-semibold text-[#D93200] hover:underline cursor-pointer"
+                      >
+                        Edit Map Pin
+                      </button>
+                    </div>
                     <input
                       type="text"
                       value={editAddress}
@@ -1539,6 +1404,24 @@ export function ShopBentoDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {activePrintOrder && (
+        <PrintDispatchModal
+          order={activePrintOrder.order}
+          detectedPrinters={detectedPrinters}
+          initialPrinterId={activePrintOrder.printerId}
+          spoolerEndpointMode={spoolerEndpointMode}
+          onRefreshPrinters={onRefreshPrinters}
+          onCompleteOrder={async (doneOrder) => {
+            const result = await onCompleteOrder(doneOrder);
+            if (result?.message) {
+              setFeedbackToast(result.message);
+            }
+            return result;
+          }}
+          onClose={() => setActivePrintOrder(null)}
+        />
       )}
 
     </div>
