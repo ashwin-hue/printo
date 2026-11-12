@@ -37,11 +37,17 @@ import confetti from 'canvas-confetti';
 import { nhost, isNhostConfigured } from './services/nhostClient';
 import {
   fetchShops,
-  fetchCustomerOrders,
+  fetchCustomerLiveSync,
+  deleteCustomerNotifications,
+  cleanupCustomerNotifiedOrders,
   submitCustomerPrintJob,
   upsertCustomerProfile,
+  READY_FOR_COLLECTION_TTL_MS,
+  isReadyOrderExpired,
+  getReadyOrderRemainingMs,
+  formatRemainingPickupTime,
 } from './services/nhostDb';
-import type { Shop, Order } from './types/database';
+import type { Shop, Order, Notification as CustomerNotification } from './types/database';
 import {
   OpenFreeMapExplorer,
   computeHaversineKm,
@@ -76,6 +82,13 @@ const PASSPORT_QUANTITIES = [
   { count: 16 as const, price: 176, perPhoto: '₹11/photo' },
   { count: 32 as const, price: 234, perPhoto: '₹7.31/photo' },
 ] as const;
+
+function doesAlertMatchOrder(alertItem: CustomerNotification, order: Order): boolean {
+  if (alertItem.id === `order-${order.id}`) return true;
+  const msg = `${alertItem.title || ''} ${alertItem.message || ''}`.toLowerCase();
+  const fileName = (order.order_documents?.[0]?.document?.file_name || '').trim().toLowerCase();
+  return Boolean(fileName && msg.includes(fileName));
+}
 
 function GoogleIcon({ className = 'w-4 h-4' }: { className?: string }) {
   return (
@@ -136,19 +149,39 @@ export function App() {
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const mapSectionRef = useRef<HTMLElement | null>(null);
   const knownOrderStatusesRef = useRef<Record<string, string> | null>(null);
+  const seenNotificationIdsRef = useRef<Set<string>>(new Set());
+  const seenStorageUserRef = useRef<string | null>(null);
+  const activeSessionUserIdRef = useRef<string | null>(null);
+  const syncInFlightRef = useRef<Promise<void> | null>(null);
+  const lastChimeAtRef = useRef<number>(0);
   const readyAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopReadyPickupChime = () => {
+    const audio = readyAudioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+  };
 
   const playReadyPickupChime = () => {
     if (typeof window === 'undefined') return;
+    const now = Date.now();
+    if (now - lastChimeAtRef.current < 3000) return;
+
     try {
       const audio = readyAudioRef.current || new Audio(readyPickupChimeUrl);
+      audio.loop = false;
       readyAudioRef.current = audio;
+      if (!audio.paused && !audio.ended) return;
+
+      lastChimeAtRef.current = now;
       audio.muted = false;
-      audio.volume = 1;
+      audio.volume = 0.85;
       audio.currentTime = 0;
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch((err) => {
+          lastChimeAtRef.current = 0;
           console.warn('Order ready chime blocked until interaction:', err);
         });
       }
@@ -161,22 +194,24 @@ export function App() {
     if (typeof window === 'undefined') return;
     const audio = new Audio(readyPickupChimeUrl);
     audio.preload = 'auto';
+    audio.loop = false;
     readyAudioRef.current = audio;
 
+    // Warm up WebAudio/media playback on first user gesture using a separate muted instance
+    // so it never interrupts or pauses an active alert chime.
     const unlockAudio = () => {
-      const target = readyAudioRef.current;
-      if (!target) return;
-      target.muted = true;
-      const p = target.play();
+      const warmAudio = new Audio(readyPickupChimeUrl);
+      warmAudio.muted = true;
+      warmAudio.volume = 0;
+      const p = warmAudio.play();
       if (p && typeof p.then === 'function') {
         p.then(() => {
-          target.pause();
-          target.currentTime = 0;
-          target.muted = false;
+          warmAudio.pause();
+          warmAudio.src = '';
           window.removeEventListener('pointerdown', unlockAudio);
           window.removeEventListener('keydown', unlockAudio);
         }).catch(() => {
-          target.muted = false;
+          // Will retry on next gesture if needed
         });
       }
     };
@@ -186,6 +221,7 @@ export function App() {
     return () => {
       window.removeEventListener('pointerdown', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
+      audio.pause();
     };
   }, []);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(() =>
@@ -193,10 +229,14 @@ export function App() {
   );
   const [notifPromptDismissed, setNotifPromptDismissed] = useState(false);
   const [orderAlertToast, setOrderAlertToast] = useState<{
-    orderNumber: string;
+    userIdNo?: string;
     shopName: string;
     status: 'completed' | 'ready_for_collection';
+    customTitle?: string;
+    customBody?: string;
   } | null>(null);
+  const [collectionAlerts, setCollectionAlerts] = useState<CustomerNotification[]>([]);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   // Print Job Drawer Flow & Upload Form state
   const [jobStep, setJobStep] = useState<'choose' | 'configure'>('choose');
@@ -259,6 +299,7 @@ export function App() {
           .then((res) => {
             window.history.replaceState({}, document.title, window.location.pathname);
             if (res.body?.user) {
+              activeSessionUserIdRef.current = res.body.user.id;
               setSessionUser(res.body.user);
               loadPortalData(res.body.user.id);
             }
@@ -269,6 +310,7 @@ export function App() {
       } else {
         const session = nhost.getUserSession();
         if (session?.user) {
+          activeSessionUserIdRef.current = session.user.id;
           setSessionUser(session.user);
           loadPortalData(session.user.id);
         }
@@ -278,10 +320,18 @@ export function App() {
         const user = storedSession?.user ?? null;
         setSessionUser(user);
         if (user) {
-          loadPortalData(user.id);
+          // Only reload when the signed-in user changes; ignore silent JWT token refreshes
+          if (activeSessionUserIdRef.current !== user.id) {
+            activeSessionUserIdRef.current = user.id;
+            loadPortalData(user.id);
+          }
         } else {
+          activeSessionUserIdRef.current = null;
+          seenStorageUserRef.current = null;
           knownOrderStatusesRef.current = null;
+          seenNotificationIdsRef.current = new Set();
           setOrders([]);
+          setCollectionAlerts([]);
         }
       });
 
@@ -336,89 +386,296 @@ export function App() {
     }
   }, [sessionUser?.id]);
 
-  // Trigger native + audio + in-app alert when a print job finishes or becomes ready
-  const processIncomingOrders = (incoming: Order[]) => {
-    const prevMap = knownOrderStatusesRef.current;
-    let shouldPlayReadyChime = false;
-    if (prevMap !== null) {
-      for (const order of incoming) {
-        const prevStatus = prevMap[order.id];
-        if (!prevStatus || prevStatus === order.status) continue;
+  const persistCollectionAlerts = (userId: string | undefined, alerts: CustomerNotification[]) => {
+    if (!userId || typeof window === 'undefined') return;
+    try {
+      if (alerts.length === 0) {
+        window.sessionStorage.removeItem(`prinrox_pickup_alerts_${userId}`);
+      } else {
+        window.sessionStorage.setItem(`prinrox_pickup_alerts_${userId}`, JSON.stringify(alerts));
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
-        const shopTitle = order.shop?.shop_name || 'your campus print shop';
-        if (order.status === 'completed') {
-          setOrderAlertToast({
-            orderNumber: order.order_number,
-            shopName: shopTitle,
-            status: 'completed',
+  useEffect(() => {
+    if (!sessionUser?.id || typeof window === 'undefined') return;
+    try {
+      const saved = window.sessionStorage.getItem(`prinrox_pickup_alerts_${sessionUser.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const now = Date.now();
+          const fresh = parsed.filter((item: any) => {
+            const createdMs = item?.created_at ? Date.parse(item.created_at) : NaN;
+            return Number.isNaN(createdMs) || now - createdMs < READY_FOR_COLLECTION_TTL_MS;
           });
-          confetti({
-            particleCount: 55,
-            spread: 65,
-            origin: { y: 0.7 },
-            colors: ['#10B981', '#FDE09B', '#FF3B00'],
-          });
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            const n = new Notification(`Print Job Completed! (#${order.order_number})`, {
-              body: `Your print order at ${shopTitle} is marked completed.`,
-              tag: `order-completed-${order.id}`,
-            });
-            n.onclick = () => {
-              window.focus();
-              setActiveView('orders');
-              n.close();
-            };
+          for (const item of fresh) {
+            if (item?.id) seenNotificationIdsRef.current.add(item.id);
           }
-        } else if (order.status === 'ready_for_collection') {
-          shouldPlayReadyChime = true;
-          const idNo = sessionUser?.id ? getCustomerOtp(sessionUser.id) : null;
-          setOrderAlertToast({
-            orderNumber: order.order_number,
-            shopName: shopTitle,
-            status: 'ready_for_collection',
-          });
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-            const n = new Notification(`Ready for Pickup! (#${order.order_number})`, {
-              body: `${shopTitle} has finished printing.${idNo ? ` Show ID No ${idNo} at the shop.` : ' Ready for collection.'}`,
-              tag: `order-ready-${order.id}`,
-              silent: true,
-            });
-            n.onclick = () => {
-              window.focus();
-              setActiveView('orders');
-              n.close();
-            };
+          setCollectionAlerts(fresh);
+          if (fresh.length !== parsed.length) {
+            persistCollectionAlerts(sessionUser.id, fresh);
           }
         }
       }
+    } catch {
+      // Ignore storage parse errors
+    }
+  }, [sessionUser?.id]);
+
+  const hydrateSeenKeys = (userId: string): Set<string> => {
+    if (seenStorageUserRef.current === userId) {
+      return seenNotificationIdsRef.current;
+    }
+    const hydrated = new Set<string>();
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(`prinrox_seen_alert_keys_${userId}`);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            for (const key of arr) {
+              if (typeof key === 'string') hydrated.add(key);
+            }
+          }
+        }
+      } catch {
+        // Ignore storage read errors
+      }
+    }
+    seenNotificationIdsRef.current = hydrated;
+    seenStorageUserRef.current = userId;
+    return hydrated;
+  };
+
+  const recordSeenKeys = (userId: string, keys: string[]) => {
+    if (!userId || keys.length === 0) return;
+    const set = hydrateSeenKeys(userId);
+    for (const k of keys) {
+      set.add(k);
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const latest = Array.from(set).slice(-250);
+        seenNotificationIdsRef.current = new Set(latest);
+        window.localStorage.setItem(`prinrox_seen_alert_keys_${userId}`, JSON.stringify(latest));
+      } catch {
+        // Ignore storage write errors
+      }
+    }
+  };
+
+  // Auto-dismiss live popup toast after 8 seconds so alerts never linger on screen
+  useEffect(() => {
+    if (!orderAlertToast) return;
+    const timer = window.setTimeout(() => {
+      setOrderAlertToast(null);
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [orderAlertToast]);
+
+  // Unified live sync: deduplicates notifications + order status transitions so each print job rings strictly once
+  const applyLiveSync = async (
+    userId: string,
+    incomingOrders: Order[],
+    incomingNotifs: CustomerNotification[]
+  ) => {
+    const seen = hydrateSeenKeys(userId);
+    const idNo = getCustomerOtp(userId);
+    const prevMap = knownOrderStatusesRef.current;
+    const syncNow = Date.now();
+    setNowMs(syncNow);
+
+    // Partition active orders vs orders whose 8-hour ready_for_collection window has expired
+    const expiredOrders = incomingOrders.filter((o) => isReadyOrderExpired(o, syncNow));
+    const expiredIds = new Set(expiredOrders.map((o) => o.id));
+    const activeIncomingOrders = incomingOrders.filter((o) => !expiredIds.has(o.id));
+
+    // 1. Filter strictly unseen DB notifications and mark them seen SYNCHRONOUSLY before any await
+    const allUnseenNotifs = incomingNotifs.filter((n) => !seen.has(n.id));
+    if (allUnseenNotifs.length > 0) {
+      recordSeenKeys(userId, allUnseenNotifs.map((n) => n.id));
+    }
+    const unseenNotifs = allUnseenNotifs.filter((n) => {
+      const createdMs = n.created_at ? Date.parse(n.created_at) : NaN;
+      return Number.isNaN(createdMs) || syncNow - createdMs < READY_FOR_COLLECTION_TTL_MS;
+    });
+
+    // 2. Identify active finished orders and mark their keys seen SYNCHRONOUSLY
+    const finishedOrders = activeIncomingOrders.filter(
+      (o) => o.status === 'ready_for_collection' || o.status === 'completed'
+    );
+    const newlyTransitionedOrders = finishedOrders.filter((o) => {
+      if (seen.has(`order-${o.id}`)) return false;
+      const prevStatus = prevMap?.[o.id];
+      return prevMap === null || (prevStatus !== undefined && prevStatus !== o.status);
+    });
+
+    if (finishedOrders.length > 0) {
+      recordSeenKeys(
+        userId,
+        finishedOrders.map((o) => `order-${o.id}`)
+      );
     }
 
-    if (shouldPlayReadyChime) {
+    // Determine which new orders are not already covered by an unseen DB notification in this same cycle
+    const notifMsgs = unseenNotifs
+      .map((n) => (n.message || '').toLowerCase())
+      .filter(Boolean);
+    const coveredByNotif = (order: Order) => {
+      if (unseenNotifs.length === 0) return false;
+      const fileName = (order.order_documents?.[0]?.document?.file_name || '').toLowerCase();
+      const shopName = (order.shop?.shop_name || '').toLowerCase();
+      return (
+        notifMsgs.some((m) => (fileName && m.includes(fileName)) || (shopName && m.includes(shopName))) ||
+        newlyTransitionedOrders.length === 1
+      );
+    };
+
+    const standaloneNewOrders = newlyTransitionedOrders.filter((o) => !coveredByNotif(o));
+    const shouldRingOnce = unseenNotifs.length > 0 || standaloneNewOrders.length > 0;
+
+    if (unseenNotifs.length > 0) {
+      const latestNotif = unseenNotifs[0];
+      setOrderAlertToast({
+        userIdNo: idNo,
+        shopName: latestNotif.message,
+        status: 'ready_for_collection',
+        customTitle: latestNotif.title,
+        customBody: latestNotif.message,
+      });
+
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const cleanTitle = (latestNotif.title || 'Ready for Pickup').replace(/\s*\(ID:\s*\d+\)/i, '');
+        const nativeNotif = new Notification(cleanTitle, {
+          body: latestNotif.message,
+          tag: `prinrox-notif-${latestNotif.id}`,
+          silent: true,
+        });
+        nativeNotif.onclick = () => {
+          window.focus();
+          setActiveView('orders');
+          nativeNotif.close();
+        };
+      }
+    } else if (standaloneNewOrders.length > 0) {
+      const latestOrder = standaloneNewOrders[0];
+      const shopTitle = latestOrder.shop?.shop_name || 'your campus print shop';
+      const isCompleted = latestOrder.status === 'completed';
+
+      setOrderAlertToast({
+        userIdNo: idNo,
+        shopName: shopTitle,
+        status: isCompleted ? 'completed' : 'ready_for_collection',
+      });
+
+      if (isCompleted) {
+        confetti({
+          particleCount: 55,
+          spread: 65,
+          origin: { y: 0.7 },
+          colors: ['#10B981', '#FDE09B', '#FF3B00'],
+        });
+      }
+
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const n = new Notification(
+          isCompleted ? 'Print Job Completed!' : 'Ready for Pickup!',
+          {
+            body: isCompleted
+              ? `Your print order at ${shopTitle} is marked completed. ID No: ${idNo}.`
+              : `${shopTitle} has finished printing. Show ID No ${idNo} at the shop.`,
+            tag: `prinrox-order-${latestOrder.id}`,
+            silent: true,
+          }
+        );
+        n.onclick = () => {
+          window.focus();
+          setActiveView('orders');
+          n.close();
+        };
+      }
+    }
+
+    if (shouldRingOnce) {
       playReadyPickupChime();
     }
 
+    // Merge genuinely new alerts and prune alerts older than 8 hours or matching expired orders
+    const addedAlerts: CustomerNotification[] =
+      unseenNotifs.length > 0 || standaloneNewOrders.length > 0
+        ? [
+            ...unseenNotifs,
+            ...standaloneNewOrders.map((o) => ({
+              id: `order-${o.id}`,
+              user_id: userId,
+              order_id: null,
+              title: 'Ready to Collect',
+              message: `${o.shop?.shop_name || 'Your print shop'} finished printing${o.order_documents?.[0]?.document?.file_name ? ` ${o.order_documents[0].document.file_name}` : ''}. Show ID No ${idNo} at the counter.`,
+              notification_type: 'ready_for_collection',
+              is_read: false,
+              created_at: new Date().toISOString(),
+            })),
+          ]
+        : [];
+
+    setCollectionAlerts((prev) => {
+      const existingIds = new Set(prev.map((p) => p.id));
+      const newOnes = addedAlerts.filter((a) => !existingIds.has(a.id));
+      const merged = [...newOnes, ...prev].filter((alertItem) => {
+        if (expiredOrders.some((exp) => doesAlertMatchOrder(alertItem, exp))) return false;
+        const createdMs = alertItem.created_at ? Date.parse(alertItem.created_at) : NaN;
+        return Number.isNaN(createdMs) || syncNow - createdMs < READY_FOR_COLLECTION_TTL_MS;
+      }).slice(0, 10);
+      persistCollectionAlerts(userId, merged);
+      return merged;
+    });
+
+    // Acknowledge / delete delivered notifications in DB immediately
+    if (allUnseenNotifs.length > 0) {
+      await deleteCustomerNotifications(allUnseenNotifs.map((n) => n.id));
+    }
+
+    // Auto-delete orders, linked documents, and any remaining storage blobs ONLY 8 hours after ready_for_collection
+    if (expiredOrders.length > 0) {
+      await cleanupCustomerNotifiedOrders(expiredOrders);
+    }
+
     const nextMap: Record<string, string> = {};
-    for (const o of incoming) {
+    for (const o of activeIncomingOrders) {
       nextMap[o.id] = o.status;
     }
     knownOrderStatusesRef.current = nextMap;
-    setOrders(incoming);
+    setOrders(activeIncomingOrders);
   };
 
-  // Poll order status in the background every 10s so completion notifications fire automatically
+  // Single-flight background sync every 10s while visible (never overlaps with loadPortalData)
   useEffect(() => {
     if (!sessionUser?.id) return;
     let active = true;
+    const currentUserId = sessionUser.id;
 
     const silentPoll = async () => {
-      try {
-        const latest = await fetchCustomerOrders(sessionUser.id);
-        if (active) {
-          processIncomingOrders(latest);
+      if (!active || syncInFlightRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      const job = (async () => {
+        try {
+          const { orders: latestOrders, notifications: latestNotifs } = await fetchCustomerLiveSync(
+            currentUserId
+          );
+          if (active) {
+            await applyLiveSync(currentUserId, latestOrders, latestNotifs);
+          }
+        } catch (err) {
+          console.error('Background order poll error:', err);
+        } finally {
+          syncInFlightRef.current = null;
         }
-      } catch (err) {
-        console.error('Background order poll error:', err);
-      }
+      })();
+      syncInFlightRef.current = job;
+      await job;
     };
 
     const intervalId = window.setInterval(silentPoll, 10000);
@@ -437,6 +694,62 @@ export function App() {
       document.removeEventListener('visibilitychange', handleFocusOrVisibility);
     };
   }, [sessionUser?.id]);
+
+  // Keep 8-hour pickup countdowns fresh every minute and auto-purge expired orders the moment 8h elapses
+  useEffect(() => {
+    if (!sessionUser?.id) return;
+    const currentUserId = sessionUser.id;
+    let cancelled = false;
+
+    const purgeDueOrdersAndAlerts = async () => {
+      if (cancelled) return;
+      const now = Date.now();
+      setNowMs(now);
+
+      const dueOrders = orders.filter((o) => isReadyOrderExpired(o, now));
+      if (dueOrders.length > 0) {
+        const dueIds = new Set(dueOrders.map((o) => o.id));
+        setOrders((prev) => prev.filter((o) => !dueIds.has(o.id)));
+        await cleanupCustomerNotifiedOrders(dueOrders);
+      }
+
+      setCollectionAlerts((prev) => {
+        const filtered = prev.filter((alertItem) => {
+          if (dueOrders.some((exp) => doesAlertMatchOrder(alertItem, exp))) return false;
+          const createdMs = alertItem.created_at ? Date.parse(alertItem.created_at) : NaN;
+          return Number.isNaN(createdMs) || now - createdMs < READY_FOR_COLLECTION_TTL_MS;
+        });
+        if (filtered.length !== prev.length) {
+          persistCollectionAlerts(currentUserId, filtered);
+          return filtered;
+        }
+        return prev;
+      });
+    };
+
+    const tickId = window.setInterval(() => {
+      purgeDueOrdersAndAlerts();
+    }, 60_000);
+
+    const nextWaitMs = orders.reduce<number | null>((soonest, o) => {
+      const rem = getReadyOrderRemainingMs(o);
+      if (rem === null) return soonest;
+      return soonest === null ? rem : Math.min(soonest, rem);
+    }, null);
+
+    let expiryTimeoutId: number | null = null;
+    if (nextWaitMs !== null && nextWaitMs < 24 * 60 * 60 * 1000) {
+      expiryTimeoutId = window.setTimeout(() => {
+        purgeDueOrdersAndAlerts();
+      }, Math.max(500, nextWaitMs + 500));
+    }
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(tickId);
+      if (expiryTimeoutId !== null) window.clearTimeout(expiryTimeoutId);
+    };
+  }, [sessionUser?.id, orders]);
 
   useEffect(() => {
     if (!showOrderModal) return;
@@ -532,35 +845,43 @@ export function App() {
   };
 
   const loadPortalData = async (userId: string) => {
-    setPortalLoading(true);
-    try {
-      const [shopsList, ordersList] = await Promise.all([
-        fetchShops(),
-        fetchCustomerOrders(userId),
-      ]);
-      setShops(shopsList);
-      const pendingQrTarget =
-        pendingScannedShopRef.current ||
-        (typeof window !== 'undefined' ? window.sessionStorage.getItem('prinrox_pending_shop') : null);
-      const matchedQrShop = pendingQrTarget ? findShopByQrPayload(shopsList, pendingQrTarget) : null;
-      if (matchedQrShop) {
-        pendingScannedShopRef.current = null;
-        try {
-          window.sessionStorage.removeItem('prinrox_pending_shop');
-        } catch {
-          // Ignore storage errors
-        }
-        setActiveView('discover');
-        openPrintFlow(matchedQrShop);
-      } else if (shopsList.length > 0 && !selectedShop) {
-        setSelectedShop(shopsList[0]);
-      }
-      processIncomingOrders(ordersList);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setPortalLoading(false);
+    if (syncInFlightRef.current) {
+      await syncInFlightRef.current;
     }
+    setPortalLoading(true);
+    const loadJob = (async () => {
+      try {
+        const [shopsList, liveSync] = await Promise.all([
+          fetchShops(),
+          fetchCustomerLiveSync(userId),
+        ]);
+        setShops(shopsList);
+        const pendingQrTarget =
+          pendingScannedShopRef.current ||
+          (typeof window !== 'undefined' ? window.sessionStorage.getItem('prinrox_pending_shop') : null);
+        const matchedQrShop = pendingQrTarget ? findShopByQrPayload(shopsList, pendingQrTarget) : null;
+        if (matchedQrShop) {
+          pendingScannedShopRef.current = null;
+          try {
+            window.sessionStorage.removeItem('prinrox_pending_shop');
+          } catch {
+            // Ignore storage errors
+          }
+          setActiveView('discover');
+          openPrintFlow(matchedQrShop);
+        } else if (shopsList.length > 0 && !selectedShop) {
+          setSelectedShop(shopsList[0]);
+        }
+        await applyLiveSync(userId, liveSync.orders, liveSync.notifications);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setPortalLoading(false);
+        syncInFlightRef.current = null;
+      }
+    })();
+    syncInFlightRef.current = loadJob;
+    await loadJob;
   };
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -574,6 +895,7 @@ export function App() {
         const res = await nhost.auth.signInEmailPassword({ email, password });
         const user = res.body.session?.user;
         if (user) {
+          activeSessionUserIdRef.current = user.id;
           setSessionUser(user);
           setSuccessMsg(`Welcome back, ${user.email}!`);
           await loadPortalData(user.id);
@@ -590,6 +912,7 @@ export function App() {
         });
         const user = res.body.session?.user;
         if (user) {
+          activeSessionUserIdRef.current = user.id;
           setSessionUser(user);
           await upsertCustomerProfile({
             id: user.id,
@@ -630,9 +953,12 @@ export function App() {
       console.error(e);
     }
     nhost.sessionStorage.remove();
+    persistCollectionAlerts(sessionUser?.id, []);
     knownOrderStatusesRef.current = null;
+    seenNotificationIdsRef.current = new Set();
     setSessionUser(null);
     setOrders([]);
+    setCollectionAlerts([]);
     setDirectionsShop(null);
     setShowProfileMenu(false);
     setOrderAlertToast(null);
@@ -910,7 +1236,7 @@ export function App() {
           colors: ['#FF3B00', '#FDE09B', '#10B981'],
         });
         setJobSuccess(
-          `Order #${order.order_number} sent to ${selectedShop.shop_name}! ID No: ${userIdNo}`
+          `Print job sent to ${selectedShop.shop_name}! Your ID No: ${userIdNo}`
         );
         setShowOrderModal(false);
         setJobStep('choose');
@@ -1140,7 +1466,13 @@ export function App() {
   // VIEW 2: SPLIT-SCREEN CUSTOMER MAP DISCOVERY & PRINT HUB (BENTO THEME)
   // =========================================================================
   const totalSpent = orders.reduce((acc, o) => acc + (Number(o.total_amount) || 0), 0);
-  const readyOrdersCount = orders.filter((o) => o.status === 'ready_for_collection').length;
+  const unmatchedCollectionAlerts = collectionAlerts.filter(
+    (alertItem) => !orders.some((o) => doesAlertMatchOrder(alertItem, o))
+  );
+  const totalPrintJobsCount = orders.length + unmatchedCollectionAlerts.length;
+  const readyOrdersCount =
+    orders.filter((o) => o.status === 'ready_for_collection').length +
+    unmatchedCollectionAlerts.length;
 
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden w-full bg-black text-white font-sans antialiased selection:bg-[#FF3B00] selection:text-white p-2.5 sm:p-3.5 flex flex-col gap-3">
@@ -1185,17 +1517,20 @@ export function App() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="font-bold text-[#FDE09B]">
-              {orderAlertToast.status === 'completed'
-                ? `Print Job Completed (#${orderAlertToast.orderNumber})`
-                : `Ready for Pickup (#${orderAlertToast.orderNumber})`}
+              {orderAlertToast.customTitle
+                ? orderAlertToast.customTitle.replace(/\s*\(ID:\s*\d+\)/i, '')
+                : orderAlertToast.status === 'completed'
+                ? 'Print Job Completed'
+                : 'Ready for Pickup'}
             </div>
-            <div className="text-[11px] text-neutral-300 truncate">
-              {orderAlertToast.shopName}
+            <div className="text-[11px] text-neutral-300 line-clamp-2">
+              {orderAlertToast.customBody || orderAlertToast.shopName}
             </div>
           </div>
           <button
             type="button"
             onClick={() => {
+              stopReadyPickupChime();
               setActiveView('orders');
               setOrderAlertToast(null);
             }}
@@ -1205,7 +1540,10 @@ export function App() {
           </button>
           <button
             type="button"
-            onClick={() => setOrderAlertToast(null)}
+            onClick={() => {
+              stopReadyPickupChime();
+              setOrderAlertToast(null);
+            }}
             className="text-neutral-400 hover:text-white cursor-pointer shrink-0"
             aria-label="Dismiss order alert"
           >
@@ -1691,13 +2029,66 @@ export function App() {
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 rounded-[24px] bg-[#FDE09B] text-[#0F1115] p-4 sm:p-5 overflow-y-auto bento-scroll shadow-xl">
+            <div className="flex-1 min-h-0 max-h-[65vh] lg:max-h-none rounded-[24px] bg-[#FDE09B] text-[#0F1115] p-4 sm:p-5 overflow-y-auto bento-scroll shadow-xl space-y-3">
+              {collectionAlerts.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-emerald-950">
+                      Pickup Alerts ({collectionAlerts.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopReadyPickupChime();
+                        setCollectionAlerts([]);
+                        persistCollectionAlerts(sessionUser?.id, []);
+                      }}
+                      className="text-[11px] font-sans font-semibold text-neutral-800 hover:text-[#D93200] cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  {collectionAlerts.map((alertItem) => (
+                    <div
+                      key={alertItem.id}
+                      className="p-3.5 rounded-[18px] bg-emerald-950 text-white border border-emerald-400/50 flex items-start justify-between gap-3 shadow-sm"
+                    >
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <BellRing className="w-4 h-4 text-[#FDE09B] shrink-0 mt-0.5" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="text-xs font-sans font-bold text-[#FDE09B]">
+                            {alertItem.title.replace(/\s*\(ID:\s*\d+\)/i, '')}
+                          </div>
+                          <div className="text-xs font-sans text-emerald-50 mt-0.5">
+                            {alertItem.message}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCollectionAlerts((prev) => {
+                            const next = prev.filter((item) => item.id !== alertItem.id);
+                            persistCollectionAlerts(sessionUser?.id, next);
+                            return next;
+                          })
+                        }
+                        className="text-emerald-200 hover:text-white cursor-pointer shrink-0"
+                        aria-label="Dismiss pickup alert"
+                      >
+                        <X className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {portalLoading && orders.length === 0 ? (
                 <div className="py-14 text-center rounded-[18px] bg-black/5 space-y-2.5">
                   <Loader2 className="w-6 h-6 text-[#D93200] animate-spin mx-auto" aria-hidden="true" />
                   <div className="text-xs font-sans text-neutral-800">Loading your orders...</div>
                 </div>
-              ) : orders.length === 0 ? (
+              ) : orders.length === 0 && collectionAlerts.length === 0 ? (
                 <div className="py-14 px-6 text-center rounded-[20px] bg-[#FAF9F6] border border-black/15 space-y-3">
                   <FileText className="w-9 h-9 text-neutral-600 mx-auto" aria-hidden="true" />
                   <div className="text-base font-sans font-bold text-[#0F1115]">No active orders yet</div>
@@ -1714,26 +2105,35 @@ export function App() {
                       shops.find((sp) => sp.shop_name === order.shop?.shop_name) ||
                       null;
                     const isCompleted = order.status === 'completed' || order.status === 'cancelled' || order.status === 'rejected';
+                    const readyRemainingMs = getReadyOrderRemainingMs(order, nowMs);
                     return (
                       <div
                         key={order.id}
                         className="p-4 rounded-[20px] bg-[#FAF9F6] border border-black/15 space-y-2.5 shadow-sm"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="px-2.5 py-0.5 rounded-full bg-black text-[#FDE09B] font-mono font-bold tabular-nums text-[11px]">
-                            #{order.order_number}
+                          <span className="px-2.5 py-0.5 rounded-full bg-black text-[#FDE09B] font-mono font-bold tabular-nums text-[11px] inline-flex items-center gap-1">
+                            <KeyRound className="w-3 h-3 text-[#FF5A1F]" aria-hidden="true" />
+                            <span>{userIdNo ? `ID: ${userIdNo}` : 'Print Job'}</span>
                           </span>
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold capitalize ${
-                              order.status === 'ready_for_collection'
-                                ? 'bg-emerald-600 text-white'
-                                : order.status === 'printing'
-                                ? 'bg-[#D93200] text-white'
-                                : 'bg-[#FDE09B] border border-black/15 text-[#0F1115]'
-                            }`}
-                          >
-                            {order.status.replace(/_/g, ' ')}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {readyRemainingMs !== null && (
+                              <span className="px-2 py-0.5 rounded-full bg-black/5 border border-black/10 text-[10px] font-mono font-semibold text-neutral-700 tabular-nums">
+                                Clears in {formatRemainingPickupTime(readyRemainingMs)}
+                              </span>
+                            )}
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold capitalize ${
+                                order.status === 'ready_for_collection'
+                                  ? 'bg-emerald-600 text-white'
+                                  : order.status === 'printing'
+                                  ? 'bg-[#D93200] text-white'
+                                  : 'bg-[#FDE09B] border border-black/15 text-[#0F1115]'
+                              }`}
+                            >
+                              {order.status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="text-sm font-sans font-bold text-[#0F1115] truncate">
@@ -1793,7 +2193,7 @@ export function App() {
                     Your Order Summary
                   </div>
                   <h2 className="font-serif text-2xl font-bold tracking-tight text-[#0F1115] mt-1">
-                    {orders.length} {orders.length === 1 ? 'Print Job' : 'Print Jobs'}
+                    {totalPrintJobsCount} {totalPrintJobsCount === 1 ? 'Print Job' : 'Print Jobs'}
                   </h2>
                 </div>
                 <button
@@ -1919,7 +2319,7 @@ export function App() {
                     <span>Your Print Orders</span>
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full bg-black text-[#FDE09B] text-[11px] font-bold tabular-nums">
-                    {orders.length}
+                    {totalPrintJobsCount}
                   </span>
                 </button>
 
