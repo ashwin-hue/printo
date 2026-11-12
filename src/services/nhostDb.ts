@@ -1086,3 +1086,137 @@ export async function cleanupExpiredShopOrders(
     return 0;
   }
 }
+
+/**
+ * Allows a shop to permanently delete itself along with all linked orders,
+ * documents metadata, uploaded storage files, hours, services, and pricing.
+ */
+export async function deleteShopAndData(
+  shopId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    // 1. Collect all orders + documents + storage file IDs associated with this shop
+    const ordersRes = await nhost.graphql.request<{ orders: Order[] }>({
+      query: `
+        query GetAllShopOrdersForDelete($shopId: uuid!) {
+          orders(where: { shop_id: { _eq: $shopId } }) {
+            id
+            order_documents {
+              document {
+                id
+                storage_file_id
+              }
+            }
+          }
+        }
+      `,
+      variables: { shopId },
+    });
+
+    const shopOrders = ordersRes.body?.data?.orders || [];
+    const storageFileIds = Array.from(
+      new Set(
+        shopOrders.flatMap((o) =>
+          (o.order_documents || [])
+            .map((od) => od.document?.storage_file_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      )
+    );
+    const docIds = Array.from(
+      new Set(
+        shopOrders.flatMap((o) =>
+          (o.order_documents || [])
+            .map((od) => od.document?.id)
+            .filter((id): id is string => Boolean(id))
+        )
+      )
+    );
+
+    // 2. Purge uploaded storage blobs first so no orphaned files linger
+    if (storageFileIds.length > 0) {
+      await deleteBucketFiles(storageFileIds);
+    }
+
+    // 3. Delete linked orders (in case orders_shop_id_fkey is still ON DELETE RESTRICT)
+    if (shopOrders.length > 0) {
+      const delOrdersRes = await nhost.graphql.request({
+        query: `
+          mutation DeleteAllShopOrders($shopId: uuid!) {
+            delete_orders(where: { shop_id: { _eq: $shopId } }) {
+              affected_rows
+            }
+          }
+        `,
+        variables: { shopId },
+      });
+      if (delOrdersRes.body?.errors?.length) {
+        console.warn('delete_orders before delete_shops warning:', delOrdersRes.body.errors[0]?.message);
+      }
+    }
+
+    // 4. Clean up unreferenced documents metadata (non-fatal)
+    if (docIds.length > 0) {
+      try {
+        await nhost.graphql.request({
+          query: `
+            mutation DeleteShopDocs($docIds: [uuid!]!) {
+              delete_documents(where: { id: { _in: $docIds } }) {
+                affected_rows
+              }
+            }
+          `,
+          variables: { docIds },
+        });
+      } catch {
+        // Non-fatal if document delete permission belongs only to document owner
+      }
+    }
+
+    // 5. Delete the shop record itself (hours/services/pricing/reviews/staff cascade automatically)
+    const delShopRes = await nhost.graphql.request<{
+      delete_shops_by_pk: { id: string } | null;
+    }>({
+      query: `
+        mutation DeleteShop($shopId: uuid!) {
+          delete_shops_by_pk(id: $shopId) {
+            id
+          }
+        }
+      `,
+      variables: { shopId },
+    });
+
+    if (delShopRes.body?.errors?.length) {
+      const errMsg = delShopRes.body.errors[0]?.message || 'Could not delete shop.';
+      if (/orders_shop_id_fkey|restrict/i.test(errMsg)) {
+        return {
+          ok: false,
+          error:
+            'Database FK constraint orders_shop_id_fkey blocked deletion. Run the updated nhost/schema.sql cascade migration or enable delete permission on orders.',
+        };
+      }
+      if (/delete_shops|permission|not found/i.test(errMsg)) {
+        return {
+          ok: false,
+          error: 'Enable Hasura delete permission on table "shops" for this role, or run nhost/schema.sql.',
+        };
+      }
+      return { ok: false, error: errMsg };
+    }
+
+    if (!delShopRes.body?.data?.delete_shops_by_pk?.id) {
+      return {
+        ok: false,
+        error: 'Shop was not deleted. Verify delete permission on "shops" in Hasura.',
+      };
+    }
+
+    return { ok: true };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err?.message || 'Unexpected error while deleting shop.',
+    };
+  }
+}

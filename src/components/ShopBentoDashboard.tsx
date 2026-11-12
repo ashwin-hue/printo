@@ -16,6 +16,7 @@ import {
   QrCode,
   RefreshCw,
   Settings,
+  Trash2,
   ArrowRight,
   Usb,
   X
@@ -77,6 +78,7 @@ interface ShopBentoDashboardProps {
       colorSingle: number;
     };
   }) => Promise<boolean>;
+  onDeleteShop: () => Promise<{ ok: boolean; error?: string }>;
   onSignOut: () => void;
 }
 
@@ -98,6 +100,7 @@ export function ShopBentoDashboard({
   onUpdateLocation,
   onVerifyPassword,
   onUpdateShopDetails,
+  onDeleteShop,
   onSignOut,
 }: ShopBentoDashboardProps) {
   const [selectedPrintersMap, setSelectedPrintersMap] = useState<Record<string, string>>({});
@@ -138,6 +141,9 @@ export function ShopBentoDashboard({
   const [editColorSingle, setEditColorSingle] = useState('10');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingShop, setDeletingShop] = useState(false);
   const [activePrintOrder, setActivePrintOrder] = useState<{
     order: Order;
     printerId?: string;
@@ -263,6 +269,9 @@ export function ShopBentoDashboard({
     setVerifyPasswordInput('');
     setPwdError(null);
     setSettingsError(null);
+    setShowDeleteConfirm(false);
+    setDeleteConfirmText('');
+    setDeletingShop(false);
 
     setEditName(shop.shop_name || '');
     setEditDesc(shop.description || '');
@@ -1297,18 +1306,103 @@ export function ShopBentoDashboard({
                   <button
                     type="button"
                     onClick={() => setShowSettingsModal(false)}
-                    className="h-11 px-5 rounded-full border border-black/25 hover:bg-black/5 text-xs font-sans font-semibold text-[#0F1115] transition-colors cursor-pointer"
+                    disabled={savingSettings || deletingShop}
+                    className="h-11 px-5 rounded-full border border-black/25 hover:bg-black/5 text-xs font-sans font-semibold text-[#0F1115] transition-colors cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={savingSettings}
+                    disabled={savingSettings || deletingShop}
                     className="flex-1 h-11 rounded-full bg-[#D93200] hover:bg-[#FF3B00] text-white font-sans text-xs font-bold tracking-wide transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {savingSettings && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
                     <span>{savingSettings ? 'Saving Changes...' : 'Save Shop Changes'}</span>
                   </button>
+                </div>
+
+                {/* Danger Zone: Permanent Self-Deletion */}
+                <div className="mt-4 pt-4 border-t border-black/15">
+                  <div className="rounded-xl border border-rose-300 bg-rose-50/90 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-sans font-bold text-rose-900">
+                          Delete Shop
+                        </div>
+                        <p className="text-[11px] font-sans text-rose-800/85">
+                          Permanently removes {shop.shop_name}, its pricing, services, orders, and stored files.
+                        </p>
+                      </div>
+                      {!showDeleteConfirm && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDeleteConfirm(true);
+                            setDeleteConfirmText('');
+                            setSettingsError(null);
+                          }}
+                          className="h-8 px-3.5 rounded-full bg-rose-700 hover:bg-rose-900 text-white text-[11px] font-sans font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Delete Shop</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {showDeleteConfirm && (
+                      <div className="space-y-2 pt-1">
+                        <label className="block text-[11px] font-sans font-semibold text-rose-950">
+                          Type <span className="font-mono font-bold">DELETE</span> to permanently delete this shop:
+                        </label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            placeholder="DELETE"
+                            className="flex-1 min-w-[140px] h-9 px-3 rounded-lg bg-white border border-rose-300 text-xs font-mono text-[#0F1115] focus:outline-none focus:border-rose-700"
+                          />
+                          <button
+                            type="button"
+                            disabled={deletingShop}
+                            onClick={() => {
+                              setShowDeleteConfirm(false);
+                              setDeleteConfirmText('');
+                            }}
+                            className="h-9 px-3 rounded-full bg-white border border-black/20 text-[11px] font-sans font-semibold text-[#0F1115] cursor-pointer disabled:opacity-50"
+                          >
+                            Keep Shop
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingShop || deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                            onClick={async () => {
+                              setSettingsError(null);
+                              setDeletingShop(true);
+                              try {
+                                const res = await onDeleteShop();
+                                if (res.ok) {
+                                  setShowSettingsModal(false);
+                                } else {
+                                  setSettingsError(res.error || 'Could not delete shop.');
+                                }
+                              } finally {
+                                setDeletingShop(false);
+                              }
+                            }}
+                            className="h-9 px-4 rounded-full bg-rose-700 hover:bg-rose-900 disabled:opacity-50 text-white text-[11px] font-sans font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                          >
+                            {deletingShop ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            )}
+                            <span>{deletingShop ? 'Deleting...' : 'Confirm Delete'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </form>
             )}
