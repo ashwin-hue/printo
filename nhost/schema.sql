@@ -169,8 +169,8 @@ CREATE TABLE IF NOT EXISTS public.documents (
 CREATE TABLE IF NOT EXISTS public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number VARCHAR(50) UNIQUE NOT NULL,
-  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
-  shop_id UUID NOT NULL REFERENCES public.shops(id) ON DELETE RESTRICT,
+  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  shop_id UUID NOT NULL REFERENCES public.shops(id) ON DELETE CASCADE,
   status order_status DEFAULT 'pending'::order_status NOT NULL,
   total_pages INTEGER DEFAULT 0 NOT NULL,
   total_copies INTEGER DEFAULT 1 NOT NULL,
@@ -194,7 +194,7 @@ CREATE TRIGGER trigger_orders_updated_at
 CREATE TABLE IF NOT EXISTS public.order_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE RESTRICT,
+  document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
   copies INTEGER DEFAULT 1 NOT NULL,
   page_range VARCHAR(50),
   color_mode VARCHAR(20) DEFAULT 'B&W' NOT NULL,
@@ -269,7 +269,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount DECIMAL(10, 2) NOT NULL,
   payment_method VARCHAR(50) DEFAULT 'UPI' NOT NULL,
   payment_status payment_status DEFAULT 'pending'::payment_status NOT NULL,
@@ -450,5 +450,32 @@ BEGIN
 EXCEPTION
   WHEN OTHERS THEN
     NULL;
+END $$;
+
+-- ==============================================================================
+-- CASCADE FOREIGN KEYS: Allow deleting shops, customers, and documents cleanly
+-- Fixes RESTRICT errors such as orders_shop_id_fkey when deleting a shop row.
+-- ==============================================================================
+DO $$
+BEGIN
+  ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_shop_id_fkey;
+  ALTER TABLE public.orders
+    ADD CONSTRAINT orders_shop_id_fkey
+    FOREIGN KEY (shop_id) REFERENCES public.shops(id) ON DELETE CASCADE;
+
+  ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_customer_id_fkey;
+  ALTER TABLE public.orders
+    ADD CONSTRAINT orders_customer_id_fkey
+    FOREIGN KEY (customer_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+  ALTER TABLE public.order_documents DROP CONSTRAINT IF EXISTS order_documents_document_id_fkey;
+  ALTER TABLE public.order_documents
+    ADD CONSTRAINT order_documents_document_id_fkey
+    FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+
+  ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_customer_id_fkey;
+  ALTER TABLE public.payments
+    ADD CONSTRAINT payments_customer_id_fkey
+    FOREIGN KEY (customer_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
 END $$;
 

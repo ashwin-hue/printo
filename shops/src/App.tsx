@@ -23,6 +23,7 @@ import {
   markOrderReadyForCollection,
   purgePrintedOrderStorage,
   cleanupExpiredShopOrders,
+  deleteShopAndData,
   upsertShopOwnerProfile,
   getBucketFileUrl,
   sendOrderCollectNotification,
@@ -490,6 +491,16 @@ export function App() {
       return true;
     }
     return false;
+  };
+
+  const handleDeleteShop = async (): Promise<{ ok: boolean; error?: string }> => {
+    if (!shop) return { ok: false, error: 'No active shop found.' };
+    const result = await deleteShopAndData(shop.id);
+    if (result.ok) {
+      setOrders([]);
+      setShop(null);
+    }
+    return result;
   };
 
   const handleToggleOnline = async () => {
@@ -1083,6 +1094,7 @@ export function App() {
       onUpdateLocation={handleUpdateLocation}
       onVerifyPassword={handleVerifyPassword}
       onUpdateShopDetails={handleUpdateShopDetails}
+      onDeleteShop={handleDeleteShop}
       onSignOut={handleSignOut}
     />
   );

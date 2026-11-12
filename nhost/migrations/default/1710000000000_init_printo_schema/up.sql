@@ -147,8 +147,8 @@ CREATE TABLE IF NOT EXISTS public.documents (
 CREATE TABLE IF NOT EXISTS public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number VARCHAR(50) UNIQUE NOT NULL,
-  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
-  shop_id UUID NOT NULL REFERENCES public.shops(id) ON DELETE RESTRICT,
+  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  shop_id UUID NOT NULL REFERENCES public.shops(id) ON DELETE CASCADE,
   status order_status DEFAULT 'pending'::order_status NOT NULL,
   total_pages INTEGER DEFAULT 0 NOT NULL,
   total_copies INTEGER DEFAULT 1 NOT NULL,
@@ -170,7 +170,7 @@ CREATE TRIGGER trigger_orders_updated_at
 CREATE TABLE IF NOT EXISTS public.order_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE RESTRICT,
+  document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
   copies INTEGER DEFAULT 1 NOT NULL,
   page_range VARCHAR(50),
   color_mode VARCHAR(20) DEFAULT 'B&W' NOT NULL,
@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
+  customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   amount DECIMAL(10, 2) NOT NULL,
   payment_method VARCHAR(50) DEFAULT 'UPI' NOT NULL,
   payment_status payment_status DEFAULT 'pending'::payment_status NOT NULL,
