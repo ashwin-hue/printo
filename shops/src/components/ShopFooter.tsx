@@ -11,7 +11,7 @@ export const ShopFooter: React.FC = () => {
               <div className="w-6 h-6 rounded bg-[#FF5A1F] flex items-center justify-center font-bold text-xs font-mono">
                 ⚡
               </div>
-              <span className="font-serif font-normal text-xl text-white">Printo Partner</span>
+              <span className="font-serif font-normal text-xl text-white">Prinrox Partner</span>
             </div>
             <p className="font-sans text-xs text-[#8B9098] leading-relaxed">
               Commercial dispatch management & laser queue telemetry for campus print hubs, copy centers, and plotters.
@@ -49,7 +49,7 @@ export const ShopFooter: React.FC = () => {
         </div>
 
         <div className="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-[11px] text-[#7A7F88]">
-          <span>&copy; {new Date().getFullYear()} Printo Technologies. Designed for operators. Calibrated for speed.</span>
+          <span>&copy; {new Date().getFullYear()} Prinrox Technologies. Designed for operators. Calibrated for speed.</span>
           <a
             href="http://localhost:5173"
             target="_blank"

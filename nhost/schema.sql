@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS public.shops (
   latitude DECIMAL(10, 7),
   longitude DECIMAL(10, 7),
   logo_url TEXT,
+  bucket_id VARCHAR(255) UNIQUE,
   is_active BOOLEAN DEFAULT true NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
@@ -154,6 +155,7 @@ CREATE TRIGGER trigger_shop_pricing_updated_at
 CREATE TABLE IF NOT EXISTS public.documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  storage_file_id UUID,
   file_name VARCHAR(255) NOT NULL,
   storage_path TEXT NOT NULL,
   file_size BIGINT NOT NULL,
@@ -214,6 +216,23 @@ CREATE TABLE IF NOT EXISTS public.order_status_history (
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+-- Trigger: Stamp completed_at automatically when status transitions to ready_for_collection or completed
+CREATE OR REPLACE FUNCTION public.set_order_ready_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (OLD.status IS DISTINCT FROM NEW.status)
+     AND NEW.status IN ('ready_for_collection'::order_status, 'completed'::order_status) THEN
+    NEW.completed_at := COALESCE(NEW.completed_at, NOW());
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trigger_orders_ready_timestamp ON public.orders;
+CREATE TRIGGER trigger_orders_ready_timestamp
+  BEFORE UPDATE OF status ON public.orders
+  FOR EACH ROW EXECUTE FUNCTION public.set_order_ready_timestamp();
 
 -- Trigger: Automatically write history when order status changes
 CREATE OR REPLACE FUNCTION public.track_order_status_change()
@@ -317,17 +336,22 @@ CREATE TABLE IF NOT EXISTS public.document_access_logs (
 -- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_shops_owner_id ON public.shops(owner_id);
 CREATE INDEX IF NOT EXISTS idx_shops_is_active ON public.shops(is_active);
+CREATE INDEX IF NOT EXISTS idx_shops_active_name ON public.shops(shop_name ASC) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_operating_hours_shop ON public.shop_operating_hours(shop_id);
 CREATE INDEX IF NOT EXISTS idx_services_shop ON public.shop_services(shop_id);
 CREATE INDEX IF NOT EXISTS idx_pricing_shop ON public.shop_pricing(shop_id);
 CREATE INDEX IF NOT EXISTS idx_documents_customer ON public.documents(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON public.orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_created_at ON public.orders(customer_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_shop ON public.orders(shop_id);
+CREATE INDEX IF NOT EXISTS idx_orders_shop_created_at ON public.orders(shop_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_ready_cleanup ON public.orders(status, completed_at, updated_at) WHERE status IN ('ready_for_collection', 'completed');
 CREATE INDEX IF NOT EXISTS idx_order_documents_order ON public.order_documents(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_documents_document ON public.order_documents(document_id);
 CREATE INDEX IF NOT EXISTS idx_order_history_order ON public.order_status_history(order_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread_user_created ON public.notifications(user_id, created_at DESC) WHERE is_read = false;
 CREATE INDEX IF NOT EXISTS idx_payments_order ON public.payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON public.payments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shop_staff_shop ON public.shop_staff(shop_id);
@@ -368,4 +392,63 @@ BEGIN
   RETURN result_profile;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ==============================================================================
+-- AUTO-CLEANUP: Delete ready_for_collection orders 8 hours after ready timestamp
+-- ==============================================================================
+CREATE OR REPLACE FUNCTION public.purge_expired_ready_orders(
+  ttl INTERVAL DEFAULT INTERVAL '8 hours'
+)
+RETURNS INTEGER AS $$
+DECLARE
+  deleted_count INTEGER := 0;
+  expired_order_ids UUID[];
+  orphan_doc_ids UUID[];
+BEGIN
+  SELECT COALESCE(array_agg(o.id), ARRAY[]::UUID[])
+  INTO expired_order_ids
+  FROM public.orders o
+  WHERE o.status IN ('ready_for_collection'::order_status, 'completed'::order_status)
+    AND COALESCE(o.completed_at, o.updated_at, o.created_at) <= (NOW() - ttl);
+
+  IF cardinality(expired_order_ids) = 0 THEN
+    RETURN 0;
+  END IF;
+
+  SELECT COALESCE(array_agg(DISTINCT od.document_id), ARRAY[]::UUID[])
+  INTO orphan_doc_ids
+  FROM public.order_documents od
+  WHERE od.order_id = ANY(expired_order_ids);
+
+  DELETE FROM public.orders
+  WHERE id = ANY(expired_order_ids);
+
+  GET DIAGNOSTICS deleted_count = ROW_COUNT;
+
+  IF cardinality(orphan_doc_ids) > 0 THEN
+    DELETE FROM public.documents d
+    WHERE d.id = ANY(orphan_doc_ids)
+      AND NOT EXISTS (
+        SELECT 1 FROM public.order_documents od2 WHERE od2.document_id = d.id
+      );
+  END IF;
+
+  RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Optional: automatically schedule every 15 minutes if pg_cron is enabled on the DB host
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    PERFORM cron.schedule(
+      'purge-expired-ready-orders-8h',
+      '*/15 * * * *',
+      'SELECT public.purge_expired_ready_orders(INTERVAL ''8 hours'');'
+    );
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    NULL;
+END $$;
 

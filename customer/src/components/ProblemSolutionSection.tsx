@@ -26,7 +26,7 @@ export const ProblemSolutionSection: React.FC = () => {
             <em className="italic text-[#0F1115]/90">Replaced by edge laser dispatch.</em>
           </h2>
           <p className="font-sans font-normal text-sm sm:text-base text-[#2A2E35] leading-relaxed pt-1">
-            Whether for semester lab records, final thesis reports, or architectural CAD plots, campus printing has remained stubbornly manual for decades. Printo turns it into an instant 30-second token pass.
+            Whether for semester lab records, final thesis reports, or architectural CAD plots, campus printing has remained stubbornly manual for decades. Prinrox turns it into an instant 30-second token pass.
           </p>
         </div>
 
@@ -91,13 +91,13 @@ export const ProblemSolutionSection: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 2: The Printo Protocol (Luminous Pale Cream/White) */}
+          {/* Card 2: The Prinrox Protocol (Luminous Pale Cream/White) */}
           <div className="rounded-[24px] p-8 sm:p-10 bg-white text-[#0F1115] border border-[#C4C9CF] shadow-xl flex flex-col justify-between relative overflow-hidden">
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-[#EEF0F2] pb-4">
                 <span className="font-mono text-[11px] font-medium text-[#FF5A1F] uppercase tracking-widest flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#FF5A1F]" />
-                  THE PRINTO PROTOCOL
+                  THE PRINROX PROTOCOL
                 </span>
                 <span className="font-mono text-[11px] text-[#FF5A1F] bg-[#FFE1D3] px-2 py-0.5 rounded-full font-bold">
                   30-SEC PICKUP

@@ -10,8 +10,11 @@
     --muted: #8B9098;
     --code: #7A7F88;
     --comment: #B3B8BF;
-    --hot: #FF5A1F;
+    --hot: #FF3B00;
+    --hot-cta: #D93200;
     --hot-soft: #FFE1D3;
+    --surface-cream: #FAF9F6;
+    --surface-butter: #FDE09B;
     --sans: 'Inter', system-ui, -apple-system, sans-serif;
     --serif: 'Newsreader', Georgia, serif;
     --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
@@ -40,20 +43,49 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom dark scrollbar */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #E2E5E9;
+  background: #000000;
 }
 ::-webkit-scrollbar-thumb {
-  background: #B3B8BF;
+  background: #2A2E35;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #8B9098;
+  background: #4B5563;
+}
+
+/* Hide scrollbar completely while preserving scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Visible sleek scrollbar for scrollable queue containers on light/butter cards */
+.queue-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 17, 21, 0.35) rgba(15, 17, 21, 0.08);
+}
+.queue-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.queue-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 17, 21, 0.08);
+  border-radius: 9999px;
+}
+.queue-scroll::-webkit-scrollbar-thumb {
+  background: rgba(15, 17, 21, 0.35);
+  border-radius: 9999px;
+}
+.queue-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 17, 21, 0.6);
 }
 
 /* Glass & Card Panels */
@@ -99,6 +131,28 @@
   background: #FFFFFF;
   color: #0F1115;
   border-color: #8B9098;
+}
+
+/* Utility animations for useful feedback */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-panel-in {
+  animation: panel-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-panel-in {
+    animation: none;
+  }
 }
 
 /* Print Styles */

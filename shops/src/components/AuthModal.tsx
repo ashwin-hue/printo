@@ -40,7 +40,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     const newUser = {
       id: `user-${Date.now()}`,
       name: name || (role === 'customer' ? 'Campus Student' : 'Shop Owner'),
-      email: email || (phone ? `${phone.replace(/\D/g, '')}@campus.edu` : 'operator@printo.in'),
+      email: email || (phone ? `${phone.replace(/\D/g, '')}@campus.edu` : 'operator@prinrox.in'),
       phone: phone || '+91 98765 43210',
       role,
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
@@ -77,7 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <div className="flex items-center justify-between pb-6 sm:pb-8">
               <div className="flex items-baseline gap-1.5 cursor-pointer">
                 <span className="font-serif font-black text-2xl tracking-tight text-white lowercase">
-                  printo
+                  prinrox
                 </span>
                 <span className="text-[#FF5A1F] text-sm">✻</span>
               </div>
@@ -223,7 +223,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           {/* Bottom Row: Stylized Down Arrow from Image */}
           <div className="pt-4 flex items-center justify-between text-white/50 border-t border-white/10 mt-4">
             <span className="font-mono text-[10px] tracking-wider uppercase">
-              PRINTO HARDWARE TELEMETRY
+              PRINROX HARDWARE TELEMETRY
             </span>
             <div className="w-7 h-7 rounded-full border border-white/30 flex items-center justify-center text-white/70">
               <span className="text-sm font-bold">↓</span>

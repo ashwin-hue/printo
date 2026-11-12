@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS public.shops (
   latitude DECIMAL(10, 7),
   longitude DECIMAL(10, 7),
   logo_url TEXT,
+  bucket_id VARCHAR(255) UNIQUE,
   is_active BOOLEAN DEFAULT true NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
@@ -134,6 +135,7 @@ CREATE TRIGGER trigger_shop_pricing_updated_at
 CREATE TABLE IF NOT EXISTS public.documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  storage_file_id UUID,
   file_name VARCHAR(255) NOT NULL,
   storage_path TEXT NOT NULL,
   file_size BIGINT NOT NULL,
@@ -272,17 +274,21 @@ CREATE TABLE IF NOT EXISTS public.document_access_logs (
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_shops_owner_id ON public.shops(owner_id);
 CREATE INDEX IF NOT EXISTS idx_shops_is_active ON public.shops(is_active);
+CREATE INDEX IF NOT EXISTS idx_shops_active_name ON public.shops(shop_name ASC) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_operating_hours_shop ON public.shop_operating_hours(shop_id);
 CREATE INDEX IF NOT EXISTS idx_services_shop ON public.shop_services(shop_id);
 CREATE INDEX IF NOT EXISTS idx_pricing_shop ON public.shop_pricing(shop_id);
 CREATE INDEX IF NOT EXISTS idx_documents_customer ON public.documents(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON public.orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_created_at ON public.orders(customer_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_shop ON public.orders(shop_id);
+CREATE INDEX IF NOT EXISTS idx_orders_shop_created_at ON public.orders(shop_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_documents_order ON public.order_documents(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_documents_document ON public.order_documents(document_id);
 CREATE INDEX IF NOT EXISTS idx_order_history_order ON public.order_status_history(order_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread_user_created ON public.notifications(user_id, created_at DESC) WHERE is_read = false;
 CREATE INDEX IF NOT EXISTS idx_payments_order ON public.payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON public.payments(customer_id);
 CREATE INDEX IF NOT EXISTS idx_shop_staff_shop ON public.shop_staff(shop_id);

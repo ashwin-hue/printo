@@ -1,9 +1,12 @@
 // PDF.js integration and PDF document utility
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure worker
+// Configure bundled local PDF.js worker (works offline with Vite builds, no CDN needed)
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.js',
+    import.meta.url
+  ).toString();
 }
 
 export interface ParsedPdfMetadata {
@@ -188,7 +191,7 @@ export function renderMockDocPageToCanvas(
   // Footer
   ctx.fillStyle = '#64748B';
   ctx.font = `${10 * scale}px sans-serif`;
-  ctx.fillText(`Printo Verified Document Dispatch • Confidential`, 40 * scale, h - 35 * scale);
+  ctx.fillText(`Prinrox Verified Document Dispatch • Confidential`, 40 * scale, h - 35 * scale);
   ctx.fillText(`Page ${pageNumber}`, w - 80 * scale, h - 35 * scale);
 }
 
@@ -223,7 +226,7 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
         <div style="font-size: 11pt; line-height: 1.6; color: #1E293B;">
           <h2 style="font-size: 14pt; margin-bottom: 12px;">Section ${i}: Production Print Output</h2>
           <p style="margin-bottom: 16px; color: #475569;">
-            This document was rendered and queued via the Printo SaaS browser-based print dispatch engine.
+            This document was rendered and queued via the Prinrox SaaS browser-based print dispatch engine.
             Printed with specified customer finishing parameters.
           </p>
           <div style="background: #F8FAFC; border: 1px dashed #94A3B8; padding: 16px; border-radius: 6px; margin: 20px 0;">
@@ -241,7 +244,7 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
           </div>
         </div>
         <div style="position: absolute; bottom: 20mm; left: 20mm; right: 20mm; border-top: 1px solid #E2E8F0; padding-top: 8px; font-size: 9pt; color: #94A3B8; text-align: center;">
-          Printo Online Printing Management Platform • Authorized Local Print Copy
+          Prinrox Online Printing Management Platform • Authorized Local Print Copy
         </div>
       </div>
     `;
@@ -252,7 +255,7 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
     <!DOCTYPE html>
     <html>
       <head>
-        <title>${orderTitle} - Printo Dispatch</title>
+        <title>${orderTitle} - Prinrox Dispatch</title>
         <style>
           @page { size: auto; margin: 0; }
           body { margin: 0; padding: 0; }
@@ -275,5 +278,136 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
       document.body.removeChild(iframe);
     }, 2000);
   }, 400);
+}
+
+export interface RenderedPrintPage {
+  pageNumber: number;
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Parses a human page range like "All", "1-3", "1, 3-5" against totalPages.
+ */
+export function parsePageRangeList(rangeText: string | undefined | null, totalPages: number): number[] {
+  const safeTotal = Math.max(1, totalPages || 1);
+  const raw = String(rangeText || '').trim();
+  if (!raw || raw.toLowerCase() === 'all') {
+    return Array.from({ length: safeTotal }, (_, i) => i + 1);
+  }
+
+  const chosen = new Set<number>();
+  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+  for (const part of parts) {
+    const dashMatch = part.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (dashMatch) {
+      const start = Math.max(1, Math.min(Number(dashMatch[1]), Number(dashMatch[2])));
+      const end = Math.min(safeTotal, Math.max(Number(dashMatch[1]), Number(dashMatch[2])));
+      for (let n = start; n <= end; n++) chosen.add(n);
+    } else if (/^\d+$/.test(part)) {
+      const n = Number(part);
+      if (n >= 1 && n <= safeTotal) chosen.add(n);
+    }
+  }
+
+  if (chosen.size === 0) {
+    return Array.from({ length: safeTotal }, (_, i) => i + 1);
+  }
+  return Array.from(chosen).sort((a, b) => a - b);
+}
+
+/**
+ * Renders an in-memory PDF or image Blob directly into page PNG Data URLs in RAM
+ * without writing anything to the user's Downloads folder.
+ */
+export async function renderBlobToPrintablePages(
+  blob: Blob,
+  options?: {
+    fileName?: string;
+    mimeType?: string;
+    scale?: number;
+    grayscale?: boolean;
+    maxPages?: number;
+  }
+): Promise<{ totalPages: number; pages: RenderedPrintPage[] }> {
+  const fileName = (options?.fileName || '').toLowerCase();
+  const mime = (options?.mimeType || blob.type || '').toLowerCase();
+  const isPdf = mime.includes('pdf') || fileName.endsWith('.pdf');
+  const scale = options?.scale ?? 1.85;
+
+  if (!isPdf) {
+    // Render image Blob cleanly via Canvas (supports optional grayscale without disk save)
+    const objUrl = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('Could not decode image file.'));
+        image.src = objUrl;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, img.naturalWidth || img.width);
+      canvas.height = Math.max(1, img.naturalHeight || img.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D context unavailable');
+      if (options?.grayscale) {
+        ctx.filter = 'grayscale(100%)';
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return {
+        totalPages: 1,
+        pages: [
+          {
+            pageNumber: 1,
+            dataUrl: canvas.toDataURL('image/png'),
+            width: canvas.width,
+            height: canvas.height,
+          },
+        ],
+      };
+    } finally {
+      URL.revokeObjectURL(objUrl);
+    }
+  }
+
+  const buffer = await blob.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const totalPages = pdf.numPages;
+  const cap = Math.min(totalPages, options?.maxPages ?? 60);
+  const pages: RenderedPrintPage[] = [];
+
+  for (let p = 1; p <= cap; p++) {
+    const page = await pdf.getPage(p);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D context unavailable');
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    if (options?.grayscale) {
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const lum = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+        d[i] = lum;
+        d[i + 1] = lum;
+        d[i + 2] = lum;
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    pages.push({
+      pageNumber: p,
+      dataUrl: canvas.toDataURL('image/png'),
+      width: canvas.width,
+      height: canvas.height,
+    });
+  }
+
+  return { totalPages, pages };
 }
 

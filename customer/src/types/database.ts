@@ -42,6 +42,7 @@ export interface Shop {
   latitude: number | null;
   longitude: number | null;
   logo_url: string | null;
+  bucket_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -86,6 +87,7 @@ export interface ShopPricing {
 export interface Document {
   id: string;
   customer_id: string;
+  storage_file_id?: string | null;
   file_name: string;
   storage_path: string;
   file_size: number;

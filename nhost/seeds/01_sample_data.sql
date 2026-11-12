@@ -6,13 +6,15 @@
 -- 1. Insert Demo Auth Users if auth.users exists
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users') THEN
-    INSERT INTO auth.users (id, email, display_name, avatar_url, locale, default_role)
+    INSERT INTO auth.users (id, email, display_name, avatar_url, locale, default_role, email_verified, password_hash)
     VALUES
-      ('a1111111-1111-1111-1111-111111111111', 'amit@metrohubs.com', 'Amit Patel', '', 'en', 'user'),
-      ('a2222222-2222-2222-2222-222222222222', 'suresh@campusprint.com', 'Suresh Kumar', '', 'en', 'user'),
-      ('a3333333-3333-3333-3333-333333333333', 'priya@campus.edu', 'Priya Sharma', '', 'en', 'user')
+      ('a1111111-1111-1111-1111-111111111111', 'amit@metrohubs.com', 'Amit Patel', '', 'en', 'user', true, crypt('printo123', gen_salt('bf', 10))),
+      ('a2222222-2222-2222-2222-222222222222', 'suresh@campusprint.com', 'Suresh Kumar', '', 'en', 'user', true, crypt('printo123', gen_salt('bf', 10))),
+      ('a3333333-3333-3333-3333-333333333333', 'priya@campus.edu', 'Priya Sharma', '', 'en', 'user', true, crypt('printo123', gen_salt('bf', 10)))
     ON CONFLICT (id) DO UPDATE SET
-      display_name = EXCLUDED.display_name;
+      display_name = EXCLUDED.display_name,
+      email_verified = true,
+      password_hash = EXCLUDED.password_hash;
   END IF;
 END $$;
 

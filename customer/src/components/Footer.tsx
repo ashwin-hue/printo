@@ -18,7 +18,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
                 ⚡
               </div>
               <span className="font-sans font-semibold text-2xl tracking-[-0.035em] text-white">
-                Printo
+                Prinrox
               </span>
             </div>
             
@@ -87,7 +87,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         </div>
 
         <div className="mt-12 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] text-[#7A7F88]">
-          <div>&copy; {new Date().getFullYear()} Printo Technologies. Designed for people. Calibrated for lasers.</div>
+          <div>&copy; {new Date().getFullYear()} Prinrox Technologies. Designed for people. Calibrated for lasers.</div>
           <div className="flex items-center gap-4">
             <span className="hover:text-white cursor-pointer">Privacy</span>
             <span>·</span>

@@ -39,7 +39,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({ order, onClose }) =>
                 <div className="w-6 h-6 rounded bg-[#FF5A1F] text-white flex items-center justify-center font-bold text-xs font-mono">
                   ⚡
                 </div>
-                <h2 className="font-serif font-normal text-2xl text-[#0F1115]">Printo Protocol</h2>
+                <h2 className="font-serif font-normal text-2xl text-[#0F1115]">Prinrox Protocol</h2>
               </div>
               <p className="font-sans text-xs text-[#7A7F88] mt-0.5">Campus Laser Dispatch Network</p>
             </div>

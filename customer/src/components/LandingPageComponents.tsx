@@ -56,7 +56,7 @@ export const HowItWorksSection: React.FC<HowItWorksProps> = ({ onStartOrder }) =
             SEQUENTIAL CALIBRATION NODES
           </div>
           <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.025em] text-[#0F1115]">
-            How Printo works.<br />
+            How Prinrox works.<br />
             <em className="italic text-[#0F1115]/90">From device to finished printout in 4 steps.</em>
           </h2>
         </div>
@@ -165,7 +165,7 @@ export const FeaturesSection: React.FC = () => {
               </div>
 
               <div className="pt-6 mt-4 border-t border-[#EEF0F2] flex items-center justify-between font-mono text-[11px] text-[#7A7F88]">
-                <span>PRINTO PRECISION ENGINE</span>
+                <span>PRINROX PRECISION ENGINE</span>
                 <span className="text-[#0F1115]">VERIFIED</span>
               </div>
             </div>
@@ -192,7 +192,7 @@ export const BenefitsSection: React.FC = () => {
               <em className="italic opacity-90">100% verified print delivery.</em>
             </h2>
             <p className="font-sans text-sm text-[#8B9098] leading-relaxed">
-              University students previously spent an average of 42 minutes standing in lines outside campus printing shops during exam submission weeks. Printo compresses this down to 30 seconds.
+              University students previously spent an average of 42 minutes standing in lines outside campus printing shops during exam submission weeks. Prinrox compresses this down to 30 seconds.
             </p>
           </div>
 
@@ -227,7 +227,7 @@ export const FAQSection: React.FC = () => {
   const faqs = [
     {
       q: 'How does remote laser dispatch work without a physical USB drive?',
-      a: 'When you upload your PDF on Printo, our client-side PDF.js rasterizer reads your file, extracts page counts, and formats the job payload directly for the shop laser console. The shop prints the file without ever inserting a thumb drive into a shared PC.'
+      a: 'When you upload your PDF on Prinrox, our client-side PDF.js rasterizer reads your file, extracts page counts, and formats the job payload directly for the shop laser console. The shop prints the file without ever inserting a thumb drive into a shared PC.'
     },
     {
       q: 'How do I pick up my documents once they are printed?',
@@ -254,7 +254,7 @@ export const FAQSection: React.FC = () => {
           </div>
           <h2 className="font-serif font-normal text-3xl sm:text-4xl lg:text-5xl leading-[1.08] tracking-[-0.025em] text-[#0F1115]">
             Frequently asked questions.<br />
-            <em className="italic text-[#0F1115]/90">Everything you need to know about Printo.</em>
+            <em className="italic text-[#0F1115]/90">Everything you need to know about Prinrox.</em>
           </h2>
         </div>
 

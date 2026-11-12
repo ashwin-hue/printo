@@ -1,5 +1,5 @@
 {
-  "name": "printo",
+  "name": "prinrox",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,8 @@
     "customer:dev": "npm --prefix customer run dev",
     "customer:build": "npm --prefix customer run build",
     "shops:dev": "npm --prefix shops run dev",
-    "shops:build": "npm --prefix shops run build"
+    "shops:build": "npm --prefix shops run build",
+    "printer:bridge": "node scripts/local-printer-bridge.mjs"
   }
 }
 

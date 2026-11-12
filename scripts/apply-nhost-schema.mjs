@@ -109,6 +109,7 @@ const RELATIONSHIPS = [
 
   // orders <-> order_documents, documents
   { type: 'array', table: 'orders', name: 'order_documents', refTable: 'order_documents', refCol: 'order_id' },
+  { type: 'array', table: 'documents', name: 'order_documents', refTable: 'order_documents', refCol: 'document_id' },
   { type: 'object', table: 'order_documents', name: 'order', fk: 'order_id' },
   { type: 'object', table: 'order_documents', name: 'document', fk: 'document_id' },
 
@@ -201,7 +202,7 @@ async function main() {
   }
   const schemaSql = fs.readFileSync(schemaPath, 'utf-8');
 
-  console.log('\n[1/4] Executing PostgreSQL Schema (15 Tables, ENUMs, Triggers)...');
+  console.log('\n[1/5] Executing PostgreSQL Schema (15 Tables, ENUMs, Triggers)...');
   try {
     await executeApi(queryEndpoint, adminSecret, {
       type: 'run_sql',
@@ -218,7 +219,7 @@ async function main() {
   }
 
   // Step 2: Track all 15 tables in Hasura GraphQL Engine via /v1/metadata
-  console.log('\n[2/4] Auto-Tracking 15 tables in Hasura GraphQL...');
+  console.log('\n[2/5] Auto-Tracking 15 tables in Hasura GraphQL...');
   for (const table of TABLES) {
     try {
       await executeApi(metadataEndpoint, adminSecret, {
@@ -239,7 +240,7 @@ async function main() {
   }
 
   // Step 3: Track Relationships via /v1/metadata
-  console.log('\n[3/4] Configuring GraphQL Object & Array Relationships...');
+  console.log('\n[3/5] Configuring GraphQL Object & Array Relationships...');
   for (const rel of RELATIONSHIPS) {
     try {
       if (rel.type === 'object') {
@@ -280,12 +281,96 @@ async function main() {
     }
   }
 
-  // Step 4: Optional Seed Data
+  // Step 4: Ensure user-role delete permissions exist for printed order & document cleanup
+  console.log('\n[4/5] Configuring Hasura delete permissions for printed order cleanup...');
+  const deletePermissions = [
+    {
+      table: 'orders',
+      filter: {
+        _or: [
+          { customer_id: { _eq: 'X-Hasura-User-Id' } },
+          { shop: { owner_id: { _eq: 'X-Hasura-User-Id' } } },
+        ],
+      },
+    },
+    {
+      table: 'order_documents',
+      filter: {
+        order: {
+          _or: [
+            { customer_id: { _eq: 'X-Hasura-User-Id' } },
+            { shop: { owner_id: { _eq: 'X-Hasura-User-Id' } } },
+          ],
+        },
+      },
+    },
+    {
+      table: 'documents',
+      filter: {
+        _or: [
+          { customer_id: { _eq: 'X-Hasura-User-Id' } },
+          { order_documents: { order: { shop: { owner_id: { _eq: 'X-Hasura-User-Id' } } } } },
+          { _not: { order_documents: {} } },
+        ],
+      },
+    },
+    {
+      table: 'notifications',
+      filter: {
+        user_id: { _eq: 'X-Hasura-User-Id' },
+      },
+    },
+    {
+      table: 'payments',
+      filter: {
+        order: {
+          _or: [
+            { customer_id: { _eq: 'X-Hasura-User-Id' } },
+            { shop: { owner_id: { _eq: 'X-Hasura-User-Id' } } },
+          ],
+        },
+      },
+    },
+    {
+      table: 'order_status_history',
+      filter: {
+        order: {
+          _or: [
+            { customer_id: { _eq: 'X-Hasura-User-Id' } },
+            { shop: { owner_id: { _eq: 'X-Hasura-User-Id' } } },
+          ],
+        },
+      },
+    },
+  ];
+
+  for (const perm of deletePermissions) {
+    try {
+      await executeApi(metadataEndpoint, adminSecret, {
+        type: 'pg_create_delete_permission',
+        args: {
+          source: 'default',
+          table: { schema: 'public', name: perm.table },
+          role: 'user',
+          permission: { filter: perm.filter },
+        },
+      });
+      console.log(`  ✓ Enabled user delete permission on public.${perm.table}`);
+    } catch (err) {
+      if (err.message && (err.message.includes('already exists') || err.message.includes('already-exists'))) {
+        console.log(`  ✓ Delete permission on public.${perm.table} already exists`);
+      } else {
+        console.warn(`  ! Note on delete permission for public.${perm.table}:`, err.message);
+      }
+    }
+  }
+
+  // Step 5: Optional Seed Data
   const seedPath = path.join(rootDir, 'nhost', 'seeds', '01_sample_data.sql');
   const shouldSeed = args.seed || (await prompt('Do you want to seed sample shops, services, and pricing? (y/N)', 'n')).toLowerCase() === 'y';
 
   if (shouldSeed && fs.existsSync(seedPath)) {
-    console.log('\n[4/4] Seeding sample campus shops, pricing, and operating hours...');
+    console.log('\n[5/5] Seeding sample campus shops, pricing, and operating hours...');
     const seedSql = fs.readFileSync(seedPath, 'utf-8');
     try {
       await executeApi(queryEndpoint, adminSecret, {
@@ -301,7 +386,7 @@ async function main() {
       console.warn('  ! Note on seed data:', err.message);
     }
   } else {
-    console.log('\n[4/4] Skipping sample seed data.');
+    console.log('\n[5/5] Skipping sample seed data.');
   }
 
   console.log('\n======================================================');

@@ -77,7 +77,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <div className="flex items-center justify-between pb-6 sm:pb-8">
               <div className="flex items-baseline gap-1.5 cursor-pointer">
                 <span className="font-serif font-black text-2xl tracking-tight text-white lowercase">
-                  printo
+                  prinrox
                 </span>
                 <span className="text-[#FF5A1F] text-sm">✻</span>
               </div>
@@ -223,7 +223,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           {/* Bottom Row: Stylized Down Arrow from Image */}
           <div className="pt-4 flex items-center justify-between text-white/50 border-t border-white/10 mt-4">
             <span className="font-mono text-[10px] tracking-wider uppercase">
-              PRINTO ACADEMIC DISPATCH
+              PRINROX ACADEMIC DISPATCH
             </span>
             <div className="w-7 h-7 rounded-full border border-white/30 flex items-center justify-center text-white/70">
               <span className="text-sm font-bold">↓</span>

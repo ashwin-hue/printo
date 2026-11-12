@@ -1,34 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowRight,
   Check,
   AlertCircle,
+  Loader2,
   LogOut,
   Store,
   Clock,
   Printer,
-  FileText,
-  DollarSign,
-  TrendingUp,
-  MapPin,
-  Phone,
-  Power,
-  RefreshCw,
-  PlusCircle,
-  CheckCircle2,
-  PackageCheck
+  DollarSign
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { nhost, isNhostConfigured } from './services/nhostClient';
 import {
   fetchShopByOwner,
   registerNewShop,
+  updateShopLocation,
+  verifyOwnerPassword,
+  updateShopDetails,
   toggleShopStatus,
   fetchShopOrders,
-  updateOrderStatus,
+  markOrderReadyForCollection,
+  purgePrintedOrderStorage,
+  cleanupExpiredShopOrders,
   upsertShopOwnerProfile,
+  getBucketFileUrl,
+  sendOrderCollectNotification,
 } from './services/nhostDb';
-import type { Shop, Order, OrderStatus } from './types/database';
+import { getCustomerOtp } from './utils/otp';
+import {
+  detectConnectedPrinters,
+  scanUsbHardware,
+  type DetectedPrinter,
+} from './services/localPrinters';
+import type { Shop, Order } from './types/database';
+import { ShopBentoDashboard } from './components/ShopBentoDashboard';
+import { OpenFreeMapPicker } from './components/OpenFreeMapPicker';
 import heroCatImg from './assets/hero-cat.jpg';
 
 function GoogleIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -76,19 +83,27 @@ export function App() {
   const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [sessionUser, setSessionUser] = useState<any>(null);
 
-  // Shop state
+  // Shop & Dashboard state
   const [shop, setShop] = useState<Shop | null>(null);
   const [checkingShop, setCheckingShop] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
-  // Shop Registration Form State
+  // Live Auto-Detected Local System Printers (NEVER stored in DB)
+  const [detectedPrinters, setDetectedPrinters] = useState<DetectedPrinter[]>([]);
+  const [spoolerEndpointMode, setSpoolerEndpointMode] = useState<'dev' | 'bridge' | null>(null);
+  const [scanningPrinters, setScanningPrinters] = useState(false);
+  const [usbNotice, setUsbNotice] = useState<string | null>(null);
+
+  // Shop Registration Form State (Step 2 - No printer inputs, auto-detected later)
   const [regShopName, setRegShopName] = useState('');
   const [regDescription, setRegDescription] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regAddress, setRegAddress] = useState('');
   const [regCity, setRegCity] = useState('Bangalore');
   const [regPincode, setRegPincode] = useState('560001');
+  const [regLat, setRegLat] = useState<number>(12.9716);
+  const [regLon, setRegLon] = useState<number>(77.5946);
   const [regOpenTime, setRegOpenTime] = useState('08:00');
   const [regCloseTime, setRegCloseTime] = useState('21:00');
   const [regServices, setRegServices] = useState<string[]>([
@@ -103,13 +118,57 @@ export function App() {
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
 
-  // Check active Nhost session on load
+  const scanLocalPrinters = async () => {
+    setScanningPrinters(true);
+    try {
+      const result = await detectConnectedPrinters();
+      setDetectedPrinters(result.printers);
+      setSpoolerEndpointMode(result.endpointMode || null);
+    } finally {
+      setScanningPrinters(false);
+    }
+  };
+
+  // Auto-detect printers on USB plug/unplug events
+  useEffect(() => {
+    scanLocalPrinters();
+    const nav = navigator as any;
+    if (nav?.usb?.addEventListener) {
+      const handleUsbEvent = () => scanLocalPrinters();
+      nav.usb.addEventListener('connect', handleUsbEvent);
+      nav.usb.addEventListener('disconnect', handleUsbEvent);
+      return () => {
+        nav.usb.removeEventListener('connect', handleUsbEvent);
+        nav.usb.removeEventListener('disconnect', handleUsbEvent);
+      };
+    }
+  }, []);
+
+  // Check active Nhost session and OAuth callback on load
   useEffect(() => {
     if (isNhostConfigured) {
-      const session = nhost.getUserSession();
-      if (session?.user) {
-        setSessionUser(session.user);
-        loadShopForUser(session.user.id);
+      const params = new URLSearchParams(window.location.search);
+      const refreshToken = params.get('refreshToken');
+
+      if (refreshToken) {
+        nhost.auth
+          .refreshToken({ refreshToken })
+          .then((res) => {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            if (res.body?.user) {
+              setSessionUser(res.body.user);
+              loadShopForUser(res.body.user.id);
+            }
+          })
+          .catch((err) => {
+            console.error('OAuth refresh error:', err);
+          });
+      } else {
+        const session = nhost.getUserSession();
+        if (session?.user) {
+          setSessionUser(session.user);
+          loadShopForUser(session.user.id);
+        }
       }
 
       const unsubscribe = nhost.sessionStorage.onChange((storedSession) => {
@@ -133,7 +192,7 @@ export function App() {
       const existingShop = await fetchShopByOwner(userId);
       setShop(existingShop);
       if (existingShop) {
-        loadOrders(existingShop.id);
+        await refreshDashboardData(existingShop);
       }
     } catch (e) {
       console.error(e);
@@ -142,15 +201,81 @@ export function App() {
     }
   };
 
-  const loadOrders = async (shopId: string) => {
-    setOrdersLoading(true);
+  const refreshDashboardData = async (targetShop: Shop, silent = false) => {
+    if (!silent) {
+      setOrdersLoading(true);
+    }
     try {
-      const list = await fetchShopOrders(shopId);
-      setOrders(list);
+      const [ordersList] = await Promise.all([
+        fetchShopOrders(targetShop.id),
+        silent ? Promise.resolve() : scanLocalPrinters(),
+      ]);
+      setOrders(ordersList);
+      runPeriodicExpiredCleanup(targetShop.id);
     } catch (e) {
       console.error(e);
     } finally {
-      setOrdersLoading(false);
+      if (!silent) {
+        setOrdersLoading(false);
+      }
+    }
+  };
+
+  const pollInFlightRef = useRef(false);
+  const lastExpiredCleanupAtRef = useRef(0);
+
+  const runPeriodicExpiredCleanup = (shopId: string) => {
+    const now = Date.now();
+    if (now - lastExpiredCleanupAtRef.current < 5 * 60 * 1000) return;
+    lastExpiredCleanupAtRef.current = now;
+    cleanupExpiredShopOrders(shopId).catch((err) => {
+      console.warn('Background 8h order cleanup warning:', err);
+    });
+  };
+
+  // Poll incoming customer orders every 10s while tab is visible, with overlap guard
+  useEffect(() => {
+    if (!shop?.id) return;
+    let active = true;
+
+    const silentPoll = async () => {
+      if (!active || pollInFlightRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      pollInFlightRef.current = true;
+      try {
+        await refreshDashboardData(shop, true);
+      } finally {
+        pollInFlightRef.current = false;
+      }
+    };
+
+    const intervalId = window.setInterval(silentPoll, 10000);
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        silentPoll();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [shop?.id]);
+
+  const handleScanUsbPrinter = async () => {
+    setUsbNotice(null);
+    try {
+      const usbPrinter = await scanUsbHardware();
+      if (usbPrinter) {
+        setUsbNotice(`Detected & paired USB printer: ${usbPrinter.name}`);
+        await scanLocalPrinters();
+      }
+    } catch (err: any) {
+      setUsbNotice(err?.message || 'USB hardware scan cancelled.');
     }
   };
 
@@ -161,54 +286,42 @@ export function App() {
     setAuthLoading(true);
 
     try {
-      if (isNhostConfigured) {
-        if (authMode === 'login') {
-          const res = await nhost.auth.signInEmailPassword({ email, password });
-          const user = res.body.session?.user;
-          if (user) {
-            setSessionUser(user);
-            setAuthSuccess('Welcome back, Operator!');
-            await loadShopForUser(user.id);
-          }
-        } else {
-          // Register Shop Owner
-          const res = await nhost.auth.signUpEmailPassword({
-            email,
-            password,
-            options: {
-              displayName: operatorName || 'Shop Operator',
-              defaultRole: 'user',
-              metadata: {
-                role: 'shop_owner',
-                phone: operatorPhone,
-              },
-            },
-          });
-
-          const user = res.body.session?.user;
-          if (user) {
-            setSessionUser(user);
-            await upsertShopOwnerProfile({
-              id: user.id,
-              email: user.email || email,
-              fullName: operatorName,
-              phone: operatorPhone,
-            });
-            setAuthSuccess('Operator account registered! Now set up your printing shop.');
-            await loadShopForUser(user.id);
-          } else {
-            setAuthSuccess('Account created! Please verify your email or sign in directly.');
-          }
+      if (authMode === 'login') {
+        const res = await nhost.auth.signInEmailPassword({ email, password });
+        const user = res.body.session?.user;
+        if (user) {
+          setSessionUser(user);
+          setAuthSuccess('Welcome back, Operator!');
+          await loadShopForUser(user.id);
         }
       } else {
-        // Fallback demo mode
-        const demoUser = {
-          id: 'a1111111-1111-1111-1111-111111111111',
-          email: email || 'amit@metrohubs.com',
-          displayName: operatorName || 'Amit Patel',
-        };
-        setSessionUser(demoUser);
-        loadShopForUser(demoUser.id);
+        const res = await nhost.auth.signUpEmailPassword({
+          email,
+          password,
+          options: {
+            displayName: operatorName || 'Shop Operator',
+            defaultRole: 'user',
+            metadata: {
+              role: 'shop_owner',
+              phone: operatorPhone,
+            },
+          },
+        });
+
+        const user = res.body.session?.user;
+        if (user) {
+          setSessionUser(user);
+          await upsertShopOwnerProfile({
+            id: user.id,
+            email: user.email || email,
+            fullName: operatorName,
+            phone: operatorPhone,
+          });
+          setAuthSuccess('Operator account registered! Now set up your printing shop.');
+          await loadShopForUser(user.id);
+        } else {
+          setAuthSuccess('Account created! Please verify your email or sign in directly.');
+        }
       }
     } catch (err: any) {
       setAuthError(err.message || 'Authentication failed. Please check credentials.');
@@ -221,12 +334,10 @@ export function App() {
     setAuthError(null);
     setAuthLoading(true);
     try {
-      if (isNhostConfigured) {
-        const googleUrl = nhost.auth.signInProviderURL('google', {
-          redirectTo: window.location.origin,
-        });
-        window.location.href = googleUrl;
-      }
+      const googleUrl = nhost.auth.signInProviderURL('google', {
+        redirectTo: window.location.origin,
+      });
+      window.location.href = googleUrl;
     } catch (err: any) {
       setAuthError(err.message || 'Google authentication failed.');
       setAuthLoading(false);
@@ -234,14 +345,12 @@ export function App() {
   };
 
   const handleSignOut = async () => {
-    if (isNhostConfigured) {
-      try {
-        await nhost.auth.signOut({ all: false });
-      } catch (e) {
-        console.error(e);
-      }
-      nhost.sessionStorage.remove();
+    try {
+      await nhost.auth.signOut({ all: false });
+    } catch (e) {
+      console.error(e);
     }
+    nhost.sessionStorage.remove();
     setSessionUser(null);
     setShop(null);
     setOrders([]);
@@ -254,17 +363,22 @@ export function App() {
   const handleDemoSignIn = async (demoEmail: string, demoOwnerId: string) => {
     setAuthLoading(true);
     setAuthError(null);
+    setAuthSuccess(null);
     try {
-      const demoUser = {
-        id: demoOwnerId,
+      const res = await nhost.auth.signInEmailPassword({
         email: demoEmail,
-        displayName: demoEmail.includes('amit') ? 'Amit Patel' : 'Suresh Kumar',
-      };
-      setSessionUser(demoUser);
-      setAuthSuccess(`Signed in as ${demoUser.displayName}`);
-      await loadShopForUser(demoOwnerId);
+        password: 'printo123',
+      });
+      const user = res.body?.session?.user;
+      if (user) {
+        setSessionUser(user);
+        setAuthSuccess(`Signed in as ${user.displayName || demoEmail}`);
+        await loadShopForUser(user.id);
+      } else {
+        throw new Error('Could not obtain demo session from Nhost.');
+      }
     } catch (e: any) {
-      setAuthError(e.message);
+      setAuthError(e.message || `Demo sign-in failed for ${demoOwnerId}.`);
     } finally {
       setAuthLoading(false);
     }
@@ -279,6 +393,7 @@ export function App() {
     try {
       const newShop = await registerNewShop({
         ownerId: sessionUser.id,
+        ownerName: sessionUser.displayName || operatorName || regShopName,
         shopName: regShopName,
         description: regDescription,
         phone: regPhone || operatorPhone,
@@ -286,6 +401,8 @@ export function App() {
         address: regAddress,
         city: regCity,
         pincode: regPincode,
+        latitude: regLat,
+        longitude: regLon,
         openingTime: regOpenTime,
         closingTime: regCloseTime,
         services: regServices,
@@ -304,15 +421,75 @@ export function App() {
           colors: ['#C4B5FD', '#10B981', '#F59E0B'],
         });
         setShop(newShop);
-        loadOrders(newShop.id);
-      } else {
-        setRegError('Unable to save shop details. Please verify database connection.');
+        await refreshDashboardData(newShop);
       }
     } catch (err: any) {
-      setRegError(err.message || 'Registration failed.');
+      setRegError(err.message || 'Unable to save shop details. Please verify database connection.');
     } finally {
       setRegLoading(false);
     }
+  };
+
+  const handleUpdateLocation = async (loc: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+    city?: string;
+    pincode?: string;
+  }): Promise<boolean> => {
+    if (!shop) return false;
+    const ok = await updateShopLocation({
+      shopId: shop.id,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      address: loc.address || shop.address || '',
+      city: loc.city || shop.city || '',
+      pincode: loc.pincode || shop.pincode || '',
+    });
+    if (ok) {
+      setShop({
+        ...shop,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        address: loc.address || shop.address,
+        city: loc.city || shop.city,
+        pincode: loc.pincode || shop.pincode,
+      });
+    }
+    return ok;
+  };
+
+  const handleVerifyPassword = async (pwd: string): Promise<boolean> => {
+    const ownerEmail = sessionUser?.email || shop?.email;
+    if (!ownerEmail) return false;
+    return await verifyOwnerPassword(ownerEmail, pwd);
+  };
+
+  const handleUpdateShopDetails = async (updates: {
+    shopName: string;
+    description?: string;
+    phone?: string;
+    address?: string;
+    city?: string;
+    pincode?: string;
+    latitude?: number;
+    longitude?: number;
+    openingTime?: string;
+    closingTime?: string;
+    services?: string[];
+    pricing?: { bwSingle: number; bwDouble: number; colorSingle: number };
+  }): Promise<boolean> => {
+    if (!shop || !sessionUser) return false;
+    const updated = await updateShopDetails({
+      shopId: shop.id,
+      ownerId: sessionUser.id,
+      ...updates,
+    });
+    if (updated) {
+      setShop(updated);
+      return true;
+    }
+    return false;
   };
 
   const handleToggleOnline = async () => {
@@ -324,10 +501,57 @@ export function App() {
     }
   };
 
-  const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
-    const success = await updateOrderStatus(orderId, nextStatus);
-    if (success && shop) {
-      loadOrders(shop.id);
+  const completePrintedOrder = async (
+    order: Order
+  ): Promise<{ ok: boolean; message: string }> => {
+    if (!shop) {
+      return { ok: false, message: 'Shop session unavailable.' };
+    }
+
+    // 1. Automatically push customer "ready to collect" notification once printed
+    const primaryFileName =
+      order.order_documents?.[0]?.document?.file_name || 'your print job';
+    const customerIdNo = getCustomerOtp(order.customer_id || order.customer?.id);
+    const notifResult = await sendOrderCollectNotification({
+      customerId: order.customer_id,
+      shopName: shop.shop_name,
+      fileName: primaryFileName,
+      customerIdNo,
+    });
+
+    if (!notifResult.ok) {
+      return {
+        ok: false,
+        message: notifResult.error || 'Printed, but failed to notify customer. Order kept in DB.',
+      };
+    }
+
+    // 2. Purge heavy uploaded storage file(s) immediately after printing,
+    // then mark order ready_for_collection so customers see pickup status for 8 hours before auto-deletion.
+    await purgePrintedOrderStorage(order);
+    const markedReady = await markOrderReadyForCollection(order.id);
+    if (!markedReady) {
+      return {
+        ok: false,
+        message: 'Customer notified, but could not mark order Ready for Collection.',
+      };
+    }
+
+    setOrders((prev) => prev.filter((item) => item.id !== order.id));
+    refreshDashboardData(shop, true);
+    return {
+      ok: true,
+      message: `Printed for ID: ${customerIdNo} · Ready for collection (auto-deletes in 8h)`,
+    };
+  };
+
+  const handleOpenBucketFile = async (fileId?: string | null) => {
+    if (!fileId) return;
+    const url = await getBucketFileUrl(fileId);
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      alert('Could not retrieve presigned URL for this file.');
     }
   };
 
@@ -345,41 +569,34 @@ export function App() {
       <div className="min-h-screen lg:h-screen w-full lg:w-screen overflow-y-auto lg:overflow-hidden bg-black text-white font-sans antialiased selection:bg-[#FF5A1F] selection:text-white flex flex-col lg:flex-row">
         
         {/* LEFT COLUMN: Editorial Typography & Authentication Form */}
-        <div className="w-full lg:w-[48%] xl:w-[46%] h-full p-6 sm:p-8 lg:p-10 xl:p-12 flex flex-col justify-between bg-black text-white relative z-10 overflow-y-auto">
+        <div className="w-full lg:w-[48%] xl:w-[46%] h-full p-6 sm:p-8 lg:py-8 lg:px-10 xl:py-10 xl:px-12 flex flex-col justify-between bg-black text-white relative z-10 overflow-y-auto no-scrollbar">
           
-          {/* Top Brand Logo */}
-          <div className="flex items-center justify-between pb-4">
-            <div className="flex items-baseline gap-1.5 cursor-pointer">
+          <div className="flex items-center justify-between pb-2">
+            <div className="flex items-baseline gap-1.5">
               <span className="font-serif font-black text-2xl tracking-tight text-white lowercase">
-                printo
+                prinrox
               </span>
-              <span className="text-[#FF5A1F] text-sm">✻</span>
-              <span className="ml-2 px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-mono tracking-wider text-[#C4B5FD] uppercase">
-                Shop Hub
-              </span>
+              <span className="text-[#FF3B00] text-sm" aria-hidden="true">✻</span>
             </div>
           </div>
 
-          {/* Center Auth Form Container */}
-          <div className="my-auto py-2 w-full max-w-md xl:max-w-lg mx-auto lg:mx-0 space-y-6">
+          <div className="my-auto py-2 w-full max-w-md xl:max-w-lg mx-auto lg:mx-0 space-y-5">
             
-            {/* Main Editorial Headline */}
             <div>
-              <h1 className="font-serif font-black text-5xl sm:text-6xl md:text-7xl lg:text-[76px] xl:text-[86px] text-white tracking-[-0.04em] leading-[0.92]">
-                Disc<span className="text-[#C4B5FD] inline-block -rotate-6 text-[0.88em]">✻</span>ver<br />
-                <span className="font-normal italic text-white/95">Customer at Ease.</span>
+              <h1 className="font-serif font-black text-5xl sm:text-6xl md:text-6xl lg:text-[62px] xl:text-[74px] text-white tracking-[-0.04em] leading-[0.94] text-balance">
+                Disc<span className="text-[#FF3B00]" aria-hidden="true">✻</span>ver<br />
+                <span className="font-normal text-white">Customer at Ease.</span>
               </h1>
             </div>
 
-            {/* Mode Selector Tabs (Sign In vs Register Shop Owner) */}
             <div className="flex items-center gap-1 p-1 bg-white/10 rounded-full w-fit border border-white/15">
               <button
                 type="button"
                 onClick={() => { setAuthMode('login'); setAuthError(null); setAuthSuccess(null); }}
-                className={`px-5 py-1.5 rounded-full text-xs font-mono font-medium transition-all cursor-pointer ${
+                className={`px-5 py-1.5 rounded-full text-xs font-sans font-semibold transition-colors cursor-pointer ${
                   authMode === 'login'
-                    ? 'bg-white text-black font-bold shadow-sm'
-                    : 'text-white/70 hover:text-white'
+                    ? 'bg-white text-[#0F1115]'
+                    : 'text-neutral-300 hover:text-white'
                 }`}
               >
                 Sign In
@@ -387,32 +604,30 @@ export function App() {
               <button
                 type="button"
                 onClick={() => { setAuthMode('register'); setAuthError(null); setAuthSuccess(null); }}
-                className={`px-5 py-1.5 rounded-full text-xs font-mono font-medium transition-all cursor-pointer ${
+                className={`px-5 py-1.5 rounded-full text-xs font-sans font-semibold transition-colors cursor-pointer ${
                   authMode === 'register'
-                    ? 'bg-white text-black font-bold shadow-sm'
-                    : 'text-white/70 hover:text-white'
+                    ? 'bg-white text-[#0F1115]'
+                    : 'text-neutral-300 hover:text-white'
                 }`}
               >
                 Register Shop
               </button>
             </div>
 
-            {/* Status Alerts */}
             {authError && (
-              <div className="p-3 rounded-2xl bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs font-sans flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+              <div className="p-3 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs font-sans flex items-start gap-2 animate-panel-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" aria-hidden="true" />
                 <span>{authError}</span>
               </div>
             )}
 
             {authSuccess && (
-              <div className="p-3 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 text-emerald-200 text-xs font-sans flex items-start gap-2">
-                <Check className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+              <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-sans flex items-start gap-2 animate-panel-in">
+                <Check className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" aria-hidden="true" />
                 <span>{authSuccess}</span>
               </div>
             )}
 
-            {/* Authentication Form */}
             <form onSubmit={handleAuthSubmit} className="space-y-3">
               {authMode === 'register' && (
                 <>
@@ -422,7 +637,7 @@ export function App() {
                       value={operatorName}
                       onChange={(e) => setOperatorName(e.target.value)}
                       placeholder="Operator Full Name (e.g. Amit Patel)"
-                      className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/20 text-xs font-sans text-white placeholder:text-white/40 focus:outline-none focus:border-[#C4B5FD] focus:ring-1 focus:ring-[#C4B5FD] transition-all"
+                      className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-400 focus:outline-none focus:border-[#FF3B00] focus:ring-1 focus:ring-[#FF3B00] transition-colors"
                       required
                     />
                   </div>
@@ -431,8 +646,8 @@ export function App() {
                       type="tel"
                       value={operatorPhone}
                       onChange={(e) => setOperatorPhone(e.target.value)}
-                      placeholder="Contact / WhatsApp Phone (+91 98765 43210)"
-                      className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/20 text-xs font-mono text-white placeholder:text-white/40 focus:outline-none focus:border-[#C4B5FD] focus:ring-1 focus:ring-[#C4B5FD] transition-all"
+                      placeholder="Contact Phone (+91 98765 43210)"
+                      className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white placeholder:text-neutral-400 focus:outline-none focus:border-[#FF3B00] focus:ring-1 focus:ring-[#FF3B00] transition-colors"
                     />
                   </div>
                 </>
@@ -443,8 +658,8 @@ export function App() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="operator@printo.in"
-                  className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/20 text-xs font-mono text-white placeholder:text-white/40 focus:outline-none focus:border-[#C4B5FD] focus:ring-1 focus:ring-[#C4B5FD] transition-all"
+                  placeholder="operator@prinrox.in"
+                  className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-400 focus:outline-none focus:border-[#FF3B00] focus:ring-1 focus:ring-[#FF3B00] transition-colors"
                   required
                 />
               </div>
@@ -455,33 +670,36 @@ export function App() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password (min 6 characters)"
-                  className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/20 text-xs font-mono text-white placeholder:text-white/40 focus:outline-none focus:border-[#C4B5FD] focus:ring-1 focus:ring-[#C4B5FD] transition-all"
+                  className="w-full h-11 px-4 rounded-full bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-400 focus:outline-none focus:border-[#FF3B00] focus:ring-1 focus:ring-[#FF3B00] transition-colors"
                   required
                   minLength={6}
                 />
               </div>
 
-              {/* Lavender Pill Submit Button */}
               <button
                 type="submit"
                 disabled={authLoading}
-                className="h-11 px-6 rounded-full bg-[#C4B5FD] hover:bg-[#B39DFB] disabled:opacity-50 text-black font-sans font-bold text-xs shadow-sm transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer w-full mt-2"
+                className="h-11 px-6 rounded-full bg-[#D93200] hover:bg-[#FF3B00] disabled:opacity-50 text-white font-sans font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer w-full mt-2"
               >
+                {authLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                )}
                 <span>
                   {authLoading
-                    ? 'Connecting...'
+                    ? 'Signing in...'
                     : authMode === 'login'
                     ? 'Sign In to Station'
-                    : 'Create Operator Account & Register'}
+                    : 'Create Operator Account'}
                 </span>
-                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </form>
 
             {/* Quick Demo Access Pills */}
             <div className="pt-2">
-              <div className="text-[10px] font-mono text-white/40 uppercase tracking-wider mb-2">
-                Quick Demo Station Sign In:
+              <div className="text-xs font-sans font-medium text-neutral-400 mb-2">
+                Quick Demo Accounts
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -492,9 +710,9 @@ export function App() {
                       'a1111111-1111-1111-1111-111111111111'
                     )
                   }
-                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-[11px] font-mono text-white/80 transition-all flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-sans text-neutral-100 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Store className="w-3 h-3 text-[#C4B5FD]" />
+                  <Store className="w-3.5 h-3.5 text-[#FF3B00]" aria-hidden="true" />
                   <span>Metro Graphics (Amit)</span>
                 </button>
                 <button
@@ -505,29 +723,27 @@ export function App() {
                       'a2222222-2222-2222-2222-222222222222'
                     )
                   }
-                  className="px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 text-[11px] font-mono text-white/80 transition-all flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-sans text-neutral-100 transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Printer className="w-3 h-3 text-emerald-400" />
+                  <Printer className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
                   <span>PrintFast Hub (Suresh)</span>
                 </button>
               </div>
             </div>
 
-            {/* Divider: or */}
             <div className="relative flex items-center justify-center py-1">
               <div className="w-full border-t border-white/15" />
-              <span className="bg-black px-3 font-mono text-[11px] text-white/40 uppercase tracking-wider">
+              <span className="bg-black px-3 font-sans text-xs text-neutral-400">
                 or
               </span>
               <div className="w-full border-t border-white/15" />
             </div>
 
-            {/* Google Auth Button */}
             <button
               type="button"
               onClick={handleGoogleAuth}
               disabled={authLoading}
-              className="w-full h-11 px-4 rounded-full bg-white hover:bg-neutral-100 text-neutral-900 font-sans font-semibold text-xs shadow-sm transition-all hover:scale-[1.01] flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 border border-neutral-200"
+              className="w-full h-11 px-4 rounded-full bg-white hover:bg-neutral-100 text-[#0F1115] font-sans font-semibold text-xs shadow-sm transition-colors flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 border border-neutral-200"
             >
               <GoogleIcon className="w-4 h-4 shrink-0" />
               <span>Continue with Google</span>
@@ -537,9 +753,8 @@ export function App() {
           <div className="h-2" />
         </div>
 
-        {/* RIGHT COLUMN: Editorial Card with Black Cat Artwork */}
-        <div className="w-full lg:w-[52%] xl:w-[54%] h-full p-2.5 sm:p-4 lg:p-4 flex items-center justify-center bg-black">
-          <div className="w-full h-full min-h-[380px] lg:min-h-0 rounded-[20px] sm:rounded-[28px] md:rounded-[34px] border-2 border-black overflow-hidden bg-[#97B972] relative flex items-center justify-center select-none shadow-2xl">
+        <div className="w-full lg:w-[52%] xl:w-[54%] h-full p-4 flex items-center justify-center bg-black">
+          <div className="w-full h-full min-h-[380px] lg:min-h-0 rounded-[24px] overflow-hidden bg-[#97B972] relative flex items-center justify-center select-none shadow-2xl">
             <img
               src={heroCatImg}
               alt="Relaxed black cat chilling on a blue plaid pillow"
@@ -552,51 +767,57 @@ export function App() {
   }
 
   // =========================================================================
+  // LOADING STATE
+  // =========================================================================
+  if (checkingShop) {
+    return (
+      <div className="min-h-screen w-full bg-black text-white flex flex-col items-center justify-center p-6 space-y-3 font-sans">
+        <Loader2 className="w-7 h-7 text-[#FF3B00] animate-spin" aria-hidden="true" />
+        <div className="text-xs font-sans font-medium text-neutral-300">
+          Loading Shop Dashboard...
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
   // VIEW 2: SHOP REGISTRATION WINDOW (Signed in, but no shop created yet)
   // =========================================================================
-  if (!shop && !checkingShop) {
+  if (!shop) {
     return (
-      <div className="min-h-screen w-full bg-neutral-950 text-white font-sans antialiased selection:bg-[#FF5A1F] selection:text-white flex flex-col justify-between p-4 sm:p-6 lg:p-10">
+      <div className="min-h-screen w-full bg-neutral-950 text-white font-sans antialiased selection:bg-[#FF3B00] selection:text-white flex flex-col justify-between p-4 sm:p-6 lg:p-10">
         
-        {/* Top Navbar */}
         <div className="max-w-4xl mx-auto w-full flex items-center justify-between pb-6 border-b border-white/10">
-          <div className="flex items-center gap-2">
+          <div className="flex items-baseline gap-1.5">
             <span className="font-serif font-black text-2xl tracking-tight text-white lowercase">
-              printo
+              prinrox
             </span>
-            <span className="text-[#FF5A1F] text-sm">✻</span>
-            <span className="ml-2 px-2.5 py-0.5 rounded-full bg-[#C4B5FD]/20 border border-[#C4B5FD]/40 text-[#C4B5FD] text-xs font-mono">
-              Shop Onboarding
-            </span>
+            <span className="text-[#FF3B00] text-sm" aria-hidden="true">✻</span>
           </div>
 
           <button
             type="button"
             onClick={handleSignOut}
-            className="flex items-center gap-1.5 text-xs font-mono text-white/60 hover:text-rose-400 transition-colors"
+            className="flex items-center gap-1.5 text-xs font-sans font-medium text-neutral-300 hover:text-white transition-colors cursor-pointer"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Sign Out</span>
           </button>
         </div>
 
-        {/* Main Registration Form Container */}
         <div className="max-w-2xl mx-auto w-full py-8 space-y-6">
           <div>
-            <div className="text-[#C4B5FD] font-mono text-xs uppercase tracking-wider mb-1">
-              Step 2 of 2 • Station Deployment
-            </div>
-            <h1 className="font-serif font-black text-3xl sm:text-4xl text-white tracking-tight">
-              Register Your Campus Print Hub
+            <h1 className="font-serif font-black text-3xl sm:text-4xl text-white tracking-tight text-balance">
+              Register Your Printing Shop
             </h1>
-            <p className="text-white/60 text-xs sm:text-sm mt-1">
-              Configure your shop identity, campus location, opening hours, and default pricing.
+            <p className="text-neutral-300 text-xs sm:text-sm mt-1.5 font-sans">
+              Add your shop details, campus location, opening hours, and page rates. Connected printers are detected automatically.
             </p>
           </div>
 
           {regError && (
-            <div className="p-3.5 rounded-2xl bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs font-sans flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+            <div className="p-3.5 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-200 text-xs font-sans flex items-start gap-2 animate-panel-in">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" aria-hidden="true" />
               <span>{regError}</span>
             </div>
           )}
@@ -604,118 +825,136 @@ export function App() {
           <form onSubmit={handleShopRegistrationSubmit} className="space-y-6">
             
             {/* Section 1: Shop Identity */}
-            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-              <h2 className="text-xs font-mono uppercase tracking-wider text-white/70 flex items-center gap-2">
-                <Store className="w-4 h-4 text-[#C4B5FD]" />
-                <span>Shop Identity & Details</span>
+            <div className="p-5 rounded-[24px] bg-white/5 border border-white/15 space-y-4">
+              <h2 className="text-sm font-sans font-bold text-white flex items-center gap-2 text-balance">
+                <Store className="w-4 h-4 text-[#FF3B00]" aria-hidden="true" />
+                <span>Shop Details &amp; Location</span>
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    Official Shop Name *
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    Shop Name *
                   </label>
                   <input
                     type="text"
                     value={regShopName}
                     onChange={(e) => setRegShopName(e.target.value)}
-                    placeholder="e.g. Metro Graphics & Laser Center"
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#C4B5FD]"
+                    placeholder="Metro Graphics & Laser Center"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#FF3B00]"
                     required
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    Short Description / Tagline
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    Short Description
                   </label>
                   <input
                     type="text"
                     value={regDescription}
                     onChange={(e) => setRegDescription(e.target.value)}
-                    placeholder="e.g. High-speed 1200 DPI prints, thesis spiral binding, and blueprint services."
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#C4B5FD]"
+                    placeholder="High-speed prints, soft & spiral binding, and posters"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#FF3B00]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    Support / WhatsApp Phone *
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    Phone Number *
                   </label>
                   <input
                     type="tel"
                     value={regPhone}
                     onChange={(e) => setRegPhone(e.target.value)}
                     placeholder="+91 98765 43210"
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white placeholder:text-white/30 focus:outline-none focus:border-[#C4B5FD]"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#FF3B00]"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    Campus City / Region
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    City
                   </label>
                   <input
                     type="text"
                     value={regCity}
                     onChange={(e) => setRegCity(e.target.value)}
-                    placeholder="Bangalore"
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#C4B5FD]"
+                    placeholder="Bengaluru"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#FF3B00]"
                   />
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    Exact Campus Location / Address *
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    Campus Address *
                   </label>
                   <input
                     type="text"
                     value={regAddress}
                     onChange={(e) => setRegAddress(e.target.value)}
-                    placeholder="e.g. Academic Complex Block 3, Ground Floor (Opposite Canteen)"
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-[#C4B5FD]"
+                    placeholder="Academic Complex Block 3, Ground Floor"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#FF3B00]"
                     required
+                  />
+                </div>
+
+                <div className="sm:col-span-2 pt-2">
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-2">
+                    Shop Location Pin
+                  </label>
+                  <OpenFreeMapPicker
+                    latitude={regLat}
+                    longitude={regLon}
+                    heightClass="h-60"
+                    onChange={(loc) => {
+                      setRegLat(loc.latitude);
+                      setRegLon(loc.longitude);
+                      if (loc.address) setRegAddress(loc.address);
+                      if (loc.city) setRegCity(loc.city);
+                      if (loc.pincode) setRegPincode(loc.pincode);
+                    }}
                   />
                 </div>
               </div>
             </div>
 
             {/* Section 2: Operating Hours & Services */}
-            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-              <h2 className="text-xs font-mono uppercase tracking-wider text-white/70 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-emerald-400" />
-                <span>Operating Hours & Services</span>
+            <div className="p-5 rounded-[24px] bg-white/5 border border-white/15 space-y-4">
+              <h2 className="text-sm font-sans font-bold text-white flex items-center gap-2 text-balance">
+                <Clock className="w-4 h-4 text-[#FF3B00]" aria-hidden="true" />
+                <span>Hours &amp; Services</span>
               </h2>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
                     Opening Time
                   </label>
                   <input
                     type="time"
                     value={regOpenTime}
                     onChange={(e) => setRegOpenTime(e.target.value)}
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white focus:outline-none focus:border-[#C4B5FD]"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white focus:outline-none focus:border-[#FF3B00]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
                     Closing Time
                   </label>
                   <input
                     type="time"
                     value={regCloseTime}
                     onChange={(e) => setRegCloseTime(e.target.value)}
-                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white focus:outline-none focus:border-[#C4B5FD]"
+                    className="w-full h-11 px-4 rounded-xl bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white focus:outline-none focus:border-[#FF3B00]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-white/50 mb-2">
-                  Services Offered (Click to toggle)
+                <label className="block text-xs font-sans font-medium text-neutral-300 mb-2">
+                  Services Offered
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {AVAILABLE_SERVICES.map((srv) => {
@@ -725,13 +964,13 @@ export function App() {
                         type="button"
                         key={srv}
                         onClick={() => toggleService(srv)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-sans font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                           isSelected
-                            ? 'bg-[#C4B5FD] text-black font-bold'
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
+                            ? 'bg-white text-[#0F1115]'
+                            : 'bg-white/10 text-neutral-300 hover:bg-white/20'
                         }`}
                       >
-                        {isSelected && <Check className="w-3 h-3 text-black" />}
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#D93200]" aria-hidden="true" />}
                         <span>{srv}</span>
                       </button>
                     );
@@ -741,414 +980,111 @@ export function App() {
             </div>
 
             {/* Section 3: Base Pricing */}
-            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-4">
-              <h2 className="text-xs font-mono uppercase tracking-wider text-white/70 flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-amber-400" />
-                <span>Base Pricing (₹ Per Page)</span>
+            <div className="p-5 rounded-[24px] bg-white/5 border border-white/15 space-y-4">
+              <h2 className="text-sm font-sans font-bold text-white flex items-center gap-2 text-balance">
+                <DollarSign className="w-4 h-4 text-[#FF3B00]" aria-hidden="true" />
+                <span>Base Pricing (₹ per page)</span>
               </h2>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    A4 B&W Single
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    B&amp;W Single
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-3 text-white/40 text-xs">₹</span>
+                    <span className="absolute left-3 top-3 text-neutral-400 text-xs">₹</span>
                     <input
                       type="number"
                       step="0.5"
                       value={regBwSingle}
                       onChange={(e) => setRegBwSingle(e.target.value)}
-                      className="w-full h-11 pl-7 pr-3 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white focus:outline-none focus:border-[#C4B5FD]"
+                      className="w-full h-11 pl-7 pr-3 rounded-xl bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white focus:outline-none focus:border-[#FF3B00]"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    A4 B&W Double
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    B&amp;W Double
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-3 text-white/40 text-xs">₹</span>
+                    <span className="absolute left-3 top-3 text-neutral-400 text-xs">₹</span>
                     <input
                       type="number"
                       step="0.5"
                       value={regBwDouble}
                       onChange={(e) => setRegBwDouble(e.target.value)}
-                      className="w-full h-11 pl-7 pr-3 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white focus:outline-none focus:border-[#C4B5FD]"
+                      className="w-full h-11 pl-7 pr-3 rounded-xl bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white focus:outline-none focus:border-[#FF3B00]"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-white/50 mb-1">
-                    A4 Color Single
+                  <label className="block text-xs font-sans font-medium text-neutral-300 mb-1.5">
+                    Color Single
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-3 text-white/40 text-xs">₹</span>
+                    <span className="absolute left-3 top-3 text-neutral-400 text-xs">₹</span>
                     <input
                       type="number"
                       step="1"
                       value={regColorSingle}
                       onChange={(e) => setRegColorSingle(e.target.value)}
-                      className="w-full h-11 pl-7 pr-3 rounded-xl bg-white/10 border border-white/20 text-xs font-mono text-white focus:outline-none focus:border-[#C4B5FD]"
+                      className="w-full h-11 pl-7 pr-3 rounded-xl bg-white/10 border border-white/25 text-xs font-sans tabular-nums text-white focus:outline-none focus:border-[#FF3B00]"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Launch Button */}
             <button
               type="submit"
               disabled={regLoading}
-              className="w-full h-12 rounded-full bg-[#C4B5FD] hover:bg-[#B39DFB] text-black font-sans font-bold text-sm shadow-lg transition-all hover:scale-[1.01] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full h-12 rounded-full bg-[#D93200] hover:bg-[#FF3B00] text-white font-sans font-bold text-sm shadow-lg transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <span>{regLoading ? 'Registering Station on Nhost...' : 'Launch Campus Printing Station 🚀'}</span>
-              <ArrowRight className="w-4 h-4" />
+              {regLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              )}
+              <span>
+                {regLoading ? 'Creating Shop...' : 'Launch Shop Dashboard'}
+              </span>
             </button>
           </form>
         </div>
 
-        <div className="text-center text-[11px] font-mono text-white/30 py-4">
-          Printo Hub Protocol • Nhost & Hasura GraphQL Connected
+        <div className="text-center text-xs font-sans text-neutral-400 py-4">
+          Prinrox Partner
         </div>
       </div>
     );
   }
 
   // =========================================================================
-  // VIEW 3: LIVE SHOP OPERATOR COMMAND DASHBOARD (Shop is registered)
+  // VIEW 3: SWISS EDITORIAL BENTO GRID SHOP OWNER DASHBOARD
   // =========================================================================
   return (
-    <div className="min-h-screen bg-black text-white font-sans antialiased selection:bg-[#FF5A1F] selection:text-white flex flex-col">
-      
-      {/* Top Hub Bar */}
-      <header className="border-b border-white/10 bg-neutral-950/80 backdrop-blur sticky top-0 z-30 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-        
-        {/* Brand & Shop Badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-baseline gap-1">
-            <span className="font-serif font-black text-xl tracking-tight text-white lowercase">
-              printo
-            </span>
-            <span className="text-[#FF5A1F] text-xs">✻</span>
-          </div>
-
-          <div className="h-4 w-px bg-white/20" />
-
-          <div>
-            <div className="text-xs font-bold text-white flex items-center gap-2">
-              <span>{shop?.shop_name}</span>
-              <button
-                type="button"
-                onClick={handleToggleOnline}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-mono tracking-wider flex items-center gap-1 cursor-pointer transition-colors ${
-                  shop?.is_active
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                }`}
-                title="Click to toggle shop availability"
-              >
-                <Power className="w-2.5 h-2.5" />
-                <span>{shop?.is_active ? 'LIVE ON CAMPUS' : 'OFFLINE'}</span>
-              </button>
-            </div>
-            <div className="text-[11px] font-mono text-white/50 flex items-center gap-1">
-              <MapPin className="w-2.5 h-2.5" />
-              <span>{shop?.address || 'Campus Location'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Actions: Refresh & Sign Out */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => shop && loadOrders(shop.id)}
-            disabled={ordersLoading}
-            className="p-2 rounded-full bg-white/5 hover:bg-white/15 text-white/80 transition-colors cursor-pointer"
-            title="Refresh Orders"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${ordersLoading ? 'animate-spin' : ''}`} />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 text-xs font-mono transition-colors cursor-pointer"
-          >
-            <LogOut className="w-3 h-3" />
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
-        
-        {/* Metric Cards Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          
-          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-white/10">
-            <div className="text-[11px] font-mono text-white/40 uppercase tracking-wider flex items-center justify-between">
-              <span>Active Queue</span>
-              <Printer className="w-4 h-4 text-[#C4B5FD]" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-serif font-black mt-1">
-              {orders.filter((o) => ['pending', 'accepted', 'printing'].includes(o.status)).length}
-            </div>
-            <div className="text-[10px] font-mono text-emerald-400 mt-1">
-              Live campus print jobs
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-white/10">
-            <div className="text-[11px] font-mono text-white/40 uppercase tracking-wider flex items-center justify-between">
-              <span>Ready for Pickup</span>
-              <PackageCheck className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-serif font-black mt-1 text-emerald-400">
-              {orders.filter((o) => o.status === 'ready_for_collection').length}
-            </div>
-            <div className="text-[10px] font-mono text-white/50 mt-1">
-              Waiting in locker
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-white/10">
-            <div className="text-[11px] font-mono text-white/40 uppercase tracking-wider flex items-center justify-between">
-              <span>Total Orders</span>
-              <FileText className="w-4 h-4 text-blue-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-serif font-black mt-1">
-              {orders.length}
-            </div>
-            <div className="text-[10px] font-mono text-white/50 mt-1">
-              Since registration
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-white/10">
-            <div className="text-[11px] font-mono text-white/40 uppercase tracking-wider flex items-center justify-between">
-              <span>Today's Revenue</span>
-              <TrendingUp className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="text-2xl sm:text-3xl font-serif font-black mt-1 text-amber-400">
-              ₹{orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0).toFixed(0)}
-            </div>
-            <div className="text-[10px] font-mono text-white/50 mt-1">
-              Instant campus settlement
-            </div>
-          </div>
-
-        </div>
-
-        {/* Live Orders Section */}
-        <div className="rounded-3xl bg-neutral-900/50 border border-white/10 p-5 sm:p-6 space-y-4">
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-serif font-bold text-xl sm:text-2xl text-white">
-                Live Order Dispatch
-              </h2>
-              <p className="text-xs font-mono text-white/50 mt-0.5">
-                Incoming print requests from campus students. Process through stages.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => shop && loadOrders(shop.id)}
-              className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-mono text-white/80 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>Sync</span>
-            </button>
-          </div>
-
-          {/* Orders List */}
-          {orders.length === 0 ? (
-            <div className="py-12 text-center space-y-3">
-              <Printer className="w-10 h-10 text-white/20 mx-auto" />
-              <div className="text-sm font-medium text-white/70">
-                Queue is currently empty!
-              </div>
-              <p className="text-xs font-mono text-white/40 max-w-sm mx-auto">
-                Orders sent by students from the Printo Customer Portal will arrive here in real-time.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {orders.map((order) => {
-                const doc = order.order_documents?.[0];
-                return (
-                  <div
-                    key={order.id}
-                    className="p-4 sm:p-5 rounded-2xl bg-black/60 border border-white/10 hover:border-white/20 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
-                  >
-                    {/* Left: Order Info */}
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-[#C4B5FD]">
-                          #{order.order_number}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider ${
-                            order.status === 'pending'
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              : order.status === 'printing'
-                              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                              : order.status === 'ready_for_collection'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-white/10 text-white/70'
-                          }`}
-                        >
-                          {order.status.replace('_', ' ')}
-                        </span>
-                      </div>
-
-                      <div className="text-sm font-semibold text-white">
-                        {doc?.document?.file_name || 'Document Print'}
-                      </div>
-
-                      <div className="text-xs font-mono text-white/50 flex flex-wrap gap-x-3 gap-y-1">
-                        <span>Copies: {order.total_copies || doc?.copies || 1}</span>
-                        <span>•</span>
-                        <span>Pages: {order.total_pages || 1}</span>
-                        <span>•</span>
-                        <span>Mode: {doc?.color_mode || 'B&W'}</span>
-                        <span>•</span>
-                        <span>Paper: {doc?.paper_size || 'A4'}</span>
-                        <span>•</span>
-                        <span>Sides: {doc?.sides || 'Single'}</span>
-                      </div>
-
-                      {order.customer && (
-                        <div className="text-[11px] font-mono text-white/40 flex items-center gap-2 pt-1">
-                          <span>Customer: {order.customer.full_name || order.customer.email}</span>
-                          {order.customer.phone && (
-                            <>
-                              <span>•</span>
-                              <Phone className="w-2.5 h-2.5" />
-                              <span>{order.customer.phone}</span>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right: Price & Status Action Buttons */}
-                    <div className="flex items-center gap-3 self-end md:self-center">
-                      <div className="text-right pr-2">
-                        <div className="text-lg font-serif font-black text-white">
-                          ₹{order.total_amount}
-                        </div>
-                        <div className="text-[10px] font-mono text-emerald-400">Paid online</div>
-                      </div>
-
-                      {order.status === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(order.id, 'accepted')}
-                          className="px-4 py-2 rounded-xl bg-[#C4B5FD] hover:bg-[#B39DFB] text-black text-xs font-bold font-sans transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Accept</span>
-                        </button>
-                      )}
-
-                      {order.status === 'accepted' && (
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(order.id, 'printing')}
-                          className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-black text-xs font-bold font-sans transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>Start Printing</span>
-                        </button>
-                      )}
-
-                      {order.status === 'printing' && (
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(order.id, 'ready_for_collection')}
-                          className="px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold font-sans transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <PackageCheck className="w-3.5 h-3.5" />
-                          <span>Ready for Pickup</span>
-                        </button>
-                      )}
-
-                      {order.status === 'ready_for_collection' && (
-                        <button
-                          type="button"
-                          onClick={() => handleStatusChange(order.id, 'completed')}
-                          className="px-4 py-2 rounded-xl bg-white hover:bg-neutral-200 text-black text-xs font-bold font-sans transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Complete Order</span>
-                        </button>
-                      )}
-
-                      {order.status === 'completed' && (
-                        <span className="text-xs font-mono text-emerald-400 font-medium">
-                          Completed ✓
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-        </div>
-
-        {/* Shop Configuration Details Bar */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-neutral-950 border border-white/10 space-y-2">
-            <div className="text-xs font-mono text-white/50 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Operating Schedule</span>
-            </div>
-            <div className="text-sm font-semibold">
-              Monday – Saturday
-            </div>
-            <div className="text-xs font-mono text-white/50">
-              08:00 AM – 09:00 PM (Instant Queue)
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-neutral-950 border border-white/10 space-y-2">
-            <div className="text-xs font-mono text-white/50 uppercase tracking-wider flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-amber-400" />
-              <span>Configured Rates</span>
-            </div>
-            <div className="text-xs font-mono text-white/80 space-y-0.5">
-              <div>A4 B&W Single: ₹2.00 / pg</div>
-              <div>A4 B&W Double: ₹3.00 / pg</div>
-              <div>A4 Color Single: ₹10.00 / pg</div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-neutral-950 border border-white/10 space-y-2">
-            <div className="text-xs font-mono text-white/50 uppercase tracking-wider flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-[#C4B5FD]" />
-              <span>Station Contact</span>
-            </div>
-            <div className="text-sm font-semibold">
-              {shop?.phone || '+91 98765 43210'}
-            </div>
-            <div className="text-xs font-mono text-white/50">
-              {shop?.email || sessionUser.email}
-            </div>
-          </div>
-        </div>
-
-      </main>
-
-    </div>
+    <ShopBentoDashboard
+      shop={shop}
+      orders={orders}
+      detectedPrinters={detectedPrinters}
+      spoolerEndpointMode={spoolerEndpointMode}
+      scanningPrinters={scanningPrinters}
+      ordersLoading={ordersLoading}
+      sessionEmail={sessionUser.email}
+      usbNotice={usbNotice}
+      onRefresh={() => refreshDashboardData(shop)}
+      onRefreshPrinters={scanLocalPrinters}
+      onScanUsbPrinter={handleScanUsbPrinter}
+      onToggleShopOnline={handleToggleOnline}
+      onCompleteOrder={completePrintedOrder}
+      onOpenBucketFile={handleOpenBucketFile}
+      onUpdateLocation={handleUpdateLocation}
+      onVerifyPassword={handleVerifyPassword}
+      onUpdateShopDetails={handleUpdateShopDetails}
+      onSignOut={handleSignOut}
+    />
   );
 }
 

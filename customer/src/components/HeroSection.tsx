@@ -25,8 +25,8 @@ const CARDS_DATA: CardData[] = [
     distilled: 6140,
     saved: 64271,
     percent: 91,
-    url: 'printo.in/hubs/metro',
-    htmlCode: `<h1>Printo — Campus Laser Protocol</h1>
+    url: 'prinrox.in/hubs/metro',
+    htmlCode: `<h1>Prinrox — Campus Laser Protocol</h1>
 <p>
   Zero-waiting cloud printing for students.
   High-speed laser hubs calibrated with
@@ -48,7 +48,7 @@ const CARDS_DATA: CardData[] = [
 <a href="/upload">Upload & Print</a>`,
     metaComment: `<!-- payload: 6,140 tokens -->
 <!-- queue: physical line eliminated -->
-<!-- printo.in/hubs/metro -->`
+<!-- prinrox.in/hubs/metro -->`
   },
   {
     id: 'price',
@@ -56,8 +56,8 @@ const CARDS_DATA: CardData[] = [
     distilled: 4960,
     saved: 36248,
     percent: 88,
-    url: 'printo.in/pricing',
-    htmlCode: `<h1>Printo — Transparent Rates</h1>
+    url: 'prinrox.in/pricing',
+    htmlCode: `<h1>Prinrox — Transparent Rates</h1>
 <p>
   Standardized academic pricing across all
   campus printing hubs. No hidden charges.
@@ -76,7 +76,7 @@ const CARDS_DATA: CardData[] = [
 </ul>`,
     metaComment: `<!-- rate_card: verified -->
 <!-- original: 41,208 tokens -->
-<!-- printo.in/pricing -->`
+<!-- prinrox.in/pricing -->`
   },
   {
     id: 'case',
@@ -84,7 +84,7 @@ const CARDS_DATA: CardData[] = [
     distilled: 6300,
     saved: 92132,
     percent: 94,
-    url: 'printo.in/cases/quadrangle',
+    url: 'prinrox.in/cases/quadrangle',
     htmlCode: `<h1>Case Study: Quadrangle Hub</h1>
 <p>
   How 4,200 Engineering students cut final
@@ -104,7 +104,7 @@ const CARDS_DATA: CardData[] = [
 <p>"We completely eliminated physical queues."</p>`,
     metaComment: `<!-- distilled: 6,300 tokens -->
 <!-- queue_eliminated: 42 mins -->
-<!-- printo.in/cases/quadrangle -->`
+<!-- prinrox.in/cases/quadrangle -->`
   },
   {
     id: 'vision',
@@ -112,9 +112,9 @@ const CARDS_DATA: CardData[] = [
     distilled: 8215,
     saved: 47655,
     percent: 85,
-    url: 'printo.in/vision',
+    url: 'prinrox.in/vision',
     htmlCode: `<article>
-  <h1>The Printo Vision</h1>
+  <h1>The Prinrox Vision</h1>
   <p>
     Documents ready for pickup before you even
     step foot inside the print shop.
@@ -133,7 +133,7 @@ const CARDS_DATA: CardData[] = [
 </article>`,
     metaComment: `<!-- payload: 8,215 tokens -->
 <!-- protocol: direct_dispatch -->
-<!-- printo.in/vision -->`
+<!-- prinrox.in/vision -->`
   },
   {
     id: 'alloy',
@@ -141,7 +141,7 @@ const CARDS_DATA: CardData[] = [
     distilled: 5512,
     saved: 58392,
     percent: 91,
-    url: 'printo.in/specs/laser-press',
+    url: 'prinrox.in/specs/laser-press',
     htmlCode: `<h1>High-Speed Laser Press Spec</h1>
 <p>Industrial thermal laser calibration.</p>
 <h2>Specification</h2>
@@ -158,7 +158,7 @@ const CARDS_DATA: CardData[] = [
 <a href="/specs.pdf">Hardware Datasheet</a>`,
     metaComment: `<!-- distilled: 5,512 tokens -->
 <!-- turnaround: 12s pickup -->
-<!-- printo.in/specs/laser-press -->`
+<!-- prinrox.in/specs/laser-press -->`
   },
   {
     id: 'journal',
@@ -166,8 +166,8 @@ const CARDS_DATA: CardData[] = [
     distilled: 7602,
     saved: 39714,
     percent: 84,
-    url: 'printo.in/journal',
-    htmlCode: `<h1>Printo Journal</h1>
+    url: 'prinrox.in/journal',
+    htmlCode: `<h1>Prinrox Journal</h1>
 <p>Field notes from university printing hubs.</p>
 <article>
   <h2>Why duplex printing saves 40% paper</h2>
@@ -183,7 +183,7 @@ const CARDS_DATA: CardData[] = [
 </article>`,
     metaComment: `<!-- payload: 7,602 tokens -->
 <!-- campus_telemetry: live -->
-<!-- printo.in/journal -->`
+<!-- prinrox.in/journal -->`
   }
 ];
 
@@ -562,7 +562,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
         {/* Right Column: Paragraph + Hot Pill Button */}
         <div className="flex flex-col items-start lg:items-start lg:max-w-[34vw]">
           <p className="font-inter font-normal text-[14.5px] sm:text-[15.5px] lg:text-[clamp(14px,1.05vw,19px)] leading-[1.55] text-[#2A2E35]">
-            Printo detects university PDF payloads at the edge, calculates laser finishing specs, and routes them directly to nearby campus print hubs—ready for 30‑second grab‑and‑go pickup.
+            Prinrox detects university PDF payloads at the edge, calculates laser finishing specs, and routes them directly to nearby campus print hubs—ready for 30‑second grab‑and‑go pickup.
           </p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
@@ -649,7 +649,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               <div className="absolute top-[4cqw] left-[4.4cqw] right-[4.4cqw] flex items-center justify-between">
                 <div className="flex items-center gap-[1.3cqw]">
                   <div className="w-[5.4cqw] h-[4.2cqw] rounded bg-white/20 flex items-center justify-center font-bold text-[2.5cqw]">⚡</div>
-                  <span className="font-inter font-medium text-[4.6cqw] tracking-[-0.03em]">Printo</span>
+                  <span className="font-inter font-medium text-[4.6cqw] tracking-[-0.03em]">Prinrox</span>
                 </div>
                 <div className="flex items-center gap-[3.4cqw] font-inter font-medium text-[1.32cqw] tracking-[0.14em] uppercase opacity-90">
                   <span className="px-[1.6cqw] py-[0.7cqw] rounded-full border border-white/60">DISPATCH</span>
@@ -690,7 +690,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {/* Card Nav Header */}
               <div className="absolute top-[4cqw] left-[4.4cqw] right-[4.4cqw] flex items-center justify-between">
                 <div className="flex items-center gap-[1.3cqw]">
-                  <span className="font-inter font-bold text-[4.6cqw] tracking-[-0.03em]">Printo</span>
+                  <span className="font-inter font-bold text-[4.6cqw] tracking-[-0.03em]">Prinrox</span>
                 </div>
                 <div className="flex items-center gap-[3.4cqw] font-inter font-medium text-[1.32cqw] tracking-[0.14em] uppercase">
                   <span>DISPATCH</span>
@@ -746,7 +746,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               }}
             >
               <div className="absolute top-[4cqw] left-[4.4cqw] right-[4.4cqw] flex items-center justify-between">
-                <span className="font-inter font-medium text-[4.6cqw]">Printo</span>
+                <span className="font-inter font-medium text-[4.6cqw]">Prinrox</span>
                 <span className="font-inter font-medium text-[1.32cqw] tracking-[0.14em] uppercase opacity-90 px-[1.6cqw] py-[0.7cqw] rounded-full border border-white/60">
                   CASE STUDY
                 </span>
@@ -785,7 +785,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               }}
             >
               <div className="absolute top-[4cqw] left-[4.4cqw] right-[4.4cqw] flex items-center justify-between">
-                <span className="font-inter font-medium text-[4.6cqw]">Printo</span>
+                <span className="font-inter font-medium text-[4.6cqw]">Prinrox</span>
                 <span className="font-inter font-medium text-[1.32cqw] tracking-[0.14em] uppercase opacity-90 px-[1.6cqw] py-[0.7cqw] rounded-full border border-white/60">
                   VISION
                 </span>
@@ -802,7 +802,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
                   style={{ backgroundImage: `url(${ASSETS.mesa})` }}
                 />
                 <p className="font-newsreader text-[3.4cqw] leading-[1.2] px-2">
-                  The Printo vision: <em className="italic opacity-80">prints ready before you step across the threshold.</em>
+                  The Prinrox vision: <em className="italic opacity-80">prints ready before you step across the threshold.</em>
                 </p>
               </div>
 
@@ -825,7 +825,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               }}
             >
               <div className="absolute top-[4cqw] left-[4.4cqw] right-[4.4cqw] flex items-center justify-between">
-                <span className="font-inter font-medium text-[4.6cqw]">Printo</span>
+                <span className="font-inter font-medium text-[4.6cqw]">Prinrox</span>
                 <span className="font-inter font-medium text-[1.32cqw] tracking-[0.14em] uppercase opacity-90 px-[1.6cqw] py-[0.7cqw] rounded-full border border-white/60">
                   HARDWARE
                 </span>
@@ -865,7 +865,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               }}
             >
               <div className="absolute top-[4cqw] left-[4.4cqw] right-[4.4cqw] flex items-center justify-between">
-                <span className="font-inter font-medium text-[4.6cqw]">Printo</span>
+                <span className="font-inter font-medium text-[4.6cqw]">Prinrox</span>
                 <span className="font-inter font-medium text-[1.32cqw] tracking-[0.14em] uppercase opacity-70 px-[1.6cqw] py-[0.7cqw] rounded-full border border-[#121A2A]/40">
                   JOURNAL
                 </span>

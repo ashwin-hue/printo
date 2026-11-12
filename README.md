@@ -1,4 +1,4 @@
-# Printo ✻ Digital Campus Printing Network
+# Prinrox ✻ Digital Campus Printing Network
 
 An ultra-fast, grab-and-go digital campus printing network powered by **Nhost** (PostgreSQL + Hasura GraphQL + Auth).
 
@@ -50,3 +50,4 @@ npm run nhost:db:apply
 - **`main`**: Full monorepo containing both portals and backend tooling.
 - **`customer`**: Dedicated branch for hosting the Customer Portal.
 - **`shops`**: Dedicated branch for hosting the Shop Owner Portal.
+

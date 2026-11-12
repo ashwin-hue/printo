@@ -188,7 +188,7 @@ export function renderMockDocPageToCanvas(
   // Footer
   ctx.fillStyle = '#64748B';
   ctx.font = `${10 * scale}px sans-serif`;
-  ctx.fillText(`Printo Verified Document Dispatch • Confidential`, 40 * scale, h - 35 * scale);
+  ctx.fillText(`Prinrox Verified Document Dispatch • Confidential`, 40 * scale, h - 35 * scale);
   ctx.fillText(`Page ${pageNumber}`, w - 80 * scale, h - 35 * scale);
 }
 
@@ -223,7 +223,7 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
         <div style="font-size: 11pt; line-height: 1.6; color: #1E293B;">
           <h2 style="font-size: 14pt; margin-bottom: 12px;">Section ${i}: Production Print Output</h2>
           <p style="margin-bottom: 16px; color: #475569;">
-            This document was rendered and queued via the Printo SaaS browser-based print dispatch engine.
+            This document was rendered and queued via the Prinrox SaaS browser-based print dispatch engine.
             Printed with specified customer finishing parameters.
           </p>
           <div style="background: #F8FAFC; border: 1px dashed #94A3B8; padding: 16px; border-radius: 6px; margin: 20px 0;">
@@ -241,7 +241,7 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
           </div>
         </div>
         <div style="position: absolute; bottom: 20mm; left: 20mm; right: 20mm; border-top: 1px solid #E2E8F0; padding-top: 8px; font-size: 9pt; color: #94A3B8; text-align: center;">
-          Printo Online Printing Management Platform • Authorized Local Print Copy
+          Prinrox Online Printing Management Platform • Authorized Local Print Copy
         </div>
       </div>
     `;
@@ -252,7 +252,7 @@ export function triggerNativeBrowserPrint(orderTitle: string, totalPages: number
     <!DOCTYPE html>
     <html>
       <head>
-        <title>${orderTitle} - Printo Dispatch</title>
+        <title>${orderTitle} - Prinrox Dispatch</title>
         <style>
           @page { size: auto; margin: 0; }
           body { margin: 0; padding: 0; }

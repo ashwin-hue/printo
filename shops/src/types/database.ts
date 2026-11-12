@@ -42,12 +42,25 @@ export interface Shop {
   latitude: number | null;
   longitude: number | null;
   logo_url: string | null;
+  bucket_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   operating_hours?: ShopOperatingHours[];
   services?: ShopService[];
   pricing?: ShopPricing[];
+}
+
+// Nhost Storage File item
+export interface BucketFile {
+  id: string;
+  bucketId: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  createdAt: string;
+  uploadedByUserId?: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 // 3. shop_operating_hours
@@ -86,6 +99,7 @@ export interface ShopPricing {
 export interface Document {
   id: string;
   customer_id: string;
+  storage_file_id?: string | null;
   file_name: string;
   storage_path: string;
   file_size: number;

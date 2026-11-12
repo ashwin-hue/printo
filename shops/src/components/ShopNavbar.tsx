@@ -93,7 +93,7 @@ export const ShopNavbar: React.FC<ShopNavbarProps> = ({
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="font-sans font-bold text-2xl tracking-[-0.035em] text-black">
-              printo
+              prinrox
             </span>
             <span className="text-[#FF5A1F] text-xs font-bold leading-none">♥</span>
           </div>

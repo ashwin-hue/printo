@@ -203,7 +203,7 @@ export const ShopOwnerDashboard: React.FC<ShopOwnerDashboardProps> = ({
                 />
                 <text className="font-mono text-[8px] font-bold tracking-[0.22em] uppercase fill-black">
                   <textPath href="#stampCircle">
-                    • PRINTO DISPATCH ENGINE • V2.0 OFFICIAL RELEASE • SPEED PRINT
+                    • PRINROX DISPATCH ENGINE • V2.0 OFFICIAL RELEASE • SPEED PRINT
                   </textPath>
                 </text>
               </svg>
