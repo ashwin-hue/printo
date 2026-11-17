@@ -1,13 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import os from 'node:os';
-// @ts-ignore Shared runtime JS helper in ../scripts/os-spooler.mjs
-import {
-  detectOsPrinters,
-  dispatchOsPrintJob,
-  getOsPrintJobStatus,
-  cancelOsPrintJob,
-} from '../scripts/os-spooler.mjs';
 
 function readJsonBody(req: any): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -38,7 +31,31 @@ function readJsonBody(req: any): Promise<any> {
 function localPrintersDevPlugin(): Plugin {
   return {
     name: 'printo-local-printers-detector',
-    configureServer(server) {
+    apply: 'serve', // Only runs during local development server, omitted during production build
+    async configureServer(server) {
+      let spooler: any = null;
+      try {
+        spooler = await import('./scripts/os-spooler.mjs');
+      } catch {
+        try {
+          spooler = await import('../scripts/os-spooler.mjs');
+        } catch {
+          spooler = null;
+        }
+      }
+
+      if (!spooler) {
+        console.warn('[printo] os-spooler.mjs not found; local printer dev middleware disabled.');
+        return;
+      }
+
+      const {
+        detectOsPrinters,
+        dispatchOsPrintJob,
+        getOsPrintJobStatus,
+        cancelOsPrintJob,
+      } = spooler;
+
       server.middlewares.use('/__local-printers', async (_req, res) => {
         try {
           const printers = await detectOsPrinters();

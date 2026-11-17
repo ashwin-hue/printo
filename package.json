@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "nhost:db:apply": "node ../scripts/apply-nhost-schema.mjs"
+    "nhost:db:apply": "node scripts/apply-nhost-schema.mjs",
+    "printer:bridge": "node scripts/local-printer-bridge.mjs"
   },
   "dependencies": {
     "@nhost/nhost-js": "^4.9.0",
