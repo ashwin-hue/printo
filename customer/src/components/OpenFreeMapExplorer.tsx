@@ -17,7 +17,13 @@ import {
 } from 'lucide-react';
 import type { Shop } from '../types/database';
 
-maplibregl.setWorkerUrl(maplibreWorkerUrl);
+try {
+  if (typeof (maplibregl as any).setWorkerUrl === 'function') {
+    (maplibregl as any).setWorkerUrl(maplibreWorkerUrl);
+  }
+} catch (e) {
+  console.warn('Could not set maplibre worker URL:', e);
+}
 
 export interface OpenFreeMapExplorerProps {
   shops: Shop[];
@@ -128,31 +134,54 @@ export function OpenFreeMapExplorer({
     const centerLon = Number(initialShop?.longitude) || 77.5946;
     const centerLat = Number(initialShop?.latitude) || 12.9716;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE_DARK,
-      center: [centerLon, centerLat],
-      zoom: 13.5,
-      attributionControl: false,
-    });
+    let resizeObserver: ResizeObserver | null = null;
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    mapRef.current = map;
+    try {
+      const map = new maplibregl.Map({
+        container: containerRef.current,
+        style: STYLE_DARK,
+        center: [centerLon, centerLat],
+        zoom: 13.5,
+        attributionControl: false,
+      });
 
-    const handleResize = () => map.resize();
-    const handleLoad = () => {
-      setMapReady(true);
-      map.resize();
-    };
-    map.on('load', handleLoad);
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(containerRef.current);
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+      mapRef.current = map;
+
+      const handleResize = () => {
+        try {
+          map.resize();
+        } catch {
+          // Ignore resize errors
+        }
+      };
+      const handleLoad = () => {
+        setMapReady(true);
+        try {
+          map.resize();
+        } catch {
+          // Ignore resize errors
+        }
+      };
+      map.on('load', handleLoad);
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(containerRef.current);
+    } catch (mapInitErr) {
+      console.warn('MapLibre initialization exception caught gracefully:', mapInitErr);
+      setGeoError('Map preview unavailable on this device.');
+    }
 
     return () => {
-      resizeObserver.disconnect();
-      popupRef.current?.remove();
+      try {
+        resizeObserver?.disconnect();
+      } catch {}
+      try {
+        popupRef.current?.remove();
+      } catch {}
       popupRef.current = null;
-      map.remove();
+      try {
+        mapRef.current?.remove();
+      } catch {}
       mapRef.current = null;
     };
   }, []);

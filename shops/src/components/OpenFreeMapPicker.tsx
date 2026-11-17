@@ -4,7 +4,13 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Crosshair, MapPin, Search, Loader2 } from 'lucide-react';
 
-maplibregl.setWorkerUrl(maplibreWorkerUrl);
+try {
+  if (typeof (maplibregl as any).setWorkerUrl === 'function') {
+    (maplibregl as any).setWorkerUrl(maplibreWorkerUrl);
+  }
+} catch (e) {
+  console.warn('Could not set maplibre worker URL:', e);
+}
 
 export interface SelectedLocation {
   latitude: number;
@@ -92,53 +98,73 @@ export function OpenFreeMapPicker({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: OPENFREEMAP_STYLE,
-      center: [longitude, latitude],
-      zoom: interactive ? 15 : 14,
-      interactive,
-      attributionControl: false,
-    });
+    let resizeObserver: ResizeObserver | null = null;
 
-    if (interactive) {
-      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-    }
-
-    const marker = new maplibregl.Marker({
-      color: '#FF3B00',
-      draggable: interactive,
-    })
-      .setLngLat([longitude, latitude])
-      .addTo(map);
-
-    if (interactive) {
-      marker.on('dragend', () => {
-        const lngLat = marker.getLngLat();
-        updatePoint(lngLat.lat, lngLat.lng, false);
+    try {
+      const map = new maplibregl.Map({
+        container: containerRef.current,
+        style: OPENFREEMAP_STYLE,
+        center: [longitude, latitude],
+        zoom: interactive ? 15 : 14,
+        interactive,
+        attributionControl: false,
       });
 
-      map.on('click', (e: maplibregl.MapMouseEvent) => {
-        updatePoint(e.lngLat.lat, e.lngLat.lng, false);
-      });
+      if (interactive) {
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+      }
+
+      const marker = new maplibregl.Marker({
+        color: '#FF3B00',
+        draggable: interactive,
+      })
+        .setLngLat([longitude, latitude])
+        .addTo(map);
+
+      if (interactive) {
+        marker.on('dragend', () => {
+          const lngLat = marker.getLngLat();
+          updatePoint(lngLat.lat, lngLat.lng, false);
+        });
+
+        map.on('click', (e: maplibregl.MapMouseEvent) => {
+          updatePoint(e.lngLat.lat, e.lngLat.lng, false);
+        });
+      }
+
+      mapRef.current = map;
+      markerRef.current = marker;
+
+      const handleResize = () => {
+        try {
+          map.resize();
+        } catch {}
+      };
+      const handleLoad = () => {
+        setMapReady(true);
+        try {
+          map.resize();
+        } catch {}
+      };
+      map.on('load', handleLoad);
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(containerRef.current);
+    } catch (mapInitErr) {
+      console.warn('MapLibre picker initialization exception caught gracefully:', mapInitErr);
+      setGeoError('Map preview unavailable on this device.');
     }
-
-    mapRef.current = map;
-    markerRef.current = marker;
-
-    const handleResize = () => map.resize();
-    const handleLoad = () => {
-      setMapReady(true);
-      map.resize();
-    };
-    map.on('load', handleLoad);
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(containerRef.current);
 
     return () => {
-      resizeObserver.disconnect();
-      map.remove();
+      try {
+        resizeObserver?.disconnect();
+      } catch {}
+      try {
+        mapRef.current?.remove();
+      } catch {}
       mapRef.current = null;
+      try {
+        markerRef.current?.remove();
+      } catch {}
       markerRef.current = null;
     };
   }, [interactive]);

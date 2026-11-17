@@ -893,11 +893,11 @@ export function App() {
     try {
       if (mode === 'login') {
         const res = await nhost.auth.signInEmailPassword({ email, password });
-        const user = res.body.session?.user;
+        const user = res.body?.session?.user || (res.body as any)?.user || nhost.getUserSession()?.user;
         if (user) {
           activeSessionUserIdRef.current = user.id;
           setSessionUser(user);
-          setSuccessMsg(`Welcome back, ${user.email}!`);
+          setSuccessMsg(`Welcome back, ${user.email || 'Customer'}!`);
           await loadPortalData(user.id);
         }
       } else {
@@ -910,7 +910,7 @@ export function App() {
             metadata: { role: 'customer' },
           },
         });
-        const user = res.body.session?.user;
+        const user = res.body?.session?.user || (res.body as any)?.user || nhost.getUserSession()?.user;
         if (user) {
           activeSessionUserIdRef.current = user.id;
           setSessionUser(user);
@@ -1417,7 +1417,9 @@ export function App() {
   const availableServices = Array.from(
     new Set([
       'Soft Binding',
-      ...shops.flatMap((s) => (s.services || []).map((srv) => srv.service_name.trim())).filter(Boolean),
+      ...shops
+        .flatMap((s) => (s.services || []).map((srv) => srv?.service_name?.trim() || ''))
+        .filter(Boolean),
     ])
   ).sort();
 
@@ -1430,12 +1432,12 @@ export function App() {
     .filter((s) => {
       const q = searchQuery.trim().toLowerCase();
       if (q) {
-        const hay = `${s.shop_name} ${s.address || ''} ${s.city || ''}`.toLowerCase();
+        const hay = `${s.shop_name || ''} ${s.address || ''} ${s.city || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       if (activeServiceFilter) {
         const hasService = (s.services || []).some((srv) =>
-          srv.service_name.toLowerCase().includes(activeServiceFilter.toLowerCase())
+          (srv?.service_name || '').toLowerCase().includes(activeServiceFilter.toLowerCase())
         );
         if (!hasService) return false;
       }
@@ -1446,7 +1448,7 @@ export function App() {
         return getShopStartingRate(a) - getShopStartingRate(b);
       }
       if (sortFilter === 'name') {
-        return a.shop_name.localeCompare(b.shop_name);
+        return (a.shop_name || '').localeCompare(b.shop_name || '');
       }
       if (userCoords) {
         const da =
@@ -2057,7 +2059,7 @@ export function App() {
                         <BellRing className="w-4 h-4 text-[#FDE09B] shrink-0 mt-0.5" aria-hidden="true" />
                         <div className="min-w-0">
                           <div className="text-xs font-sans font-bold text-[#FDE09B]">
-                            {alertItem.title.replace(/\s*\(ID:\s*\d+\)/i, '')}
+                            {(alertItem.title || 'Ready for Pickup').replace(/\s*\(ID:\s*\d+\)/i, '')}
                           </div>
                           <div className="text-xs font-sans text-emerald-50 mt-0.5">
                             {alertItem.message}
@@ -2131,7 +2133,7 @@ export function App() {
                                   : 'bg-[#FDE09B] border border-black/15 text-[#0F1115]'
                               }`}
                             >
-                              {order.status.replace(/_/g, ' ')}
+                              {(order.status || 'pending').replace(/_/g, ' ')}
                             </span>
                           </div>
                         </div>
