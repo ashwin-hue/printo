@@ -750,7 +750,7 @@ export function ShopBentoDashboard({
                                 <span>ID: {customerIdNo}</span>
                               </span>
                               <span className="px-2 py-0.5 rounded-full bg-white/85 border border-black/20 text-[#0F1115] text-[10px] font-sans font-semibold uppercase tracking-wide">
-                                {order.status.replace(/_/g, ' ')}
+                                {(order.status || 'pending').replace(/_/g, ' ')}
                               </span>
                               {fileId && (
                                 <button
@@ -959,7 +959,7 @@ export function ShopBentoDashboard({
                               : 'bg-emerald-700 text-white'
                         }`}
                       >
-                        {p.statusLabel || p.status.replace(/_/g, ' ')}
+                        {p.statusLabel || (p.status || 'online').replace(/_/g, ' ')}
                       </span>
                     </div>
                   </div>

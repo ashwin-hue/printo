@@ -289,7 +289,7 @@ export function App() {
     try {
       if (authMode === 'login') {
         const res = await nhost.auth.signInEmailPassword({ email, password });
-        const user = res.body.session?.user;
+        const user = res.body?.session?.user || (res.body as any)?.user || nhost.getUserSession()?.user;
         if (user) {
           setSessionUser(user);
           setAuthSuccess('Welcome back, Operator!');
@@ -309,7 +309,7 @@ export function App() {
           },
         });
 
-        const user = res.body.session?.user;
+        const user = res.body?.session?.user || (res.body as any)?.user || nhost.getUserSession()?.user;
         if (user) {
           setSessionUser(user);
           await upsertShopOwnerProfile({
@@ -370,7 +370,7 @@ export function App() {
         email: demoEmail,
         password: 'printo123',
       });
-      const user = res.body?.session?.user;
+      const user = res.body?.session?.user || (res.body as any)?.user || nhost.getUserSession()?.user;
       if (user) {
         setSessionUser(user);
         setAuthSuccess(`Signed in as ${user.displayName || demoEmail}`);
